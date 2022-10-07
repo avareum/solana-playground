@@ -1,32 +1,45 @@
-import { FC } from "react";
+import { FC, useMemo } from "react";
 import styled from "styled-components";
 
-import { ImgSrc } from "../../constants";
-import { Langs } from "./langs";
+import { Lang, PgExplorer } from "../../utils/pg";
+import { JavaScript, Python, QuestionMark, Rust, TypeScript } from "../Icons";
 
 interface LangIconProps {
   fileName: string;
 }
 
-const LangIcon: FC<LangIconProps> = ({ fileName }) => (
-  <Img src={getIconSrc(fileName)} alt={fileName} />
-);
+const LangIcon: FC<LangIconProps> = ({ fileName }) => {
+  const Icon = useMemo(() => {
+    switch (PgExplorer.getLanguageFromPath(fileName)) {
+      case Lang.RUST:
+        return <Rust />;
+      case Lang.PYTHON:
+        return <Python />;
+      case Lang.JAVASCRIPT:
+        return <JavaScript />;
+      case Lang.TYPESCRIPT:
+        return <TypeScript />;
+      case Lang.JAVASCRIPT_TEST:
+        return <JavaScript isTest />;
+      case Lang.TYPESCRIPT_TEST:
+        return <TypeScript isTest />;
+      default:
+        return <QuestionMark />;
+    }
+  }, [fileName]);
 
-const Img = styled.img`
-  filter: ${({ theme, src }) => {
-    if (src?.includes("python")) return;
-    return theme.isDark ? "invert(0.6)" : "invert(0.4)";
-  }};
+  return <Wrapper>{Icon}</Wrapper>;
+};
+
+const Wrapper = styled.div`
   width: 1rem;
   height: 1rem;
+
+  & > svg,
+  & > img {
+    width: 100%;
+    height: 100%;
+  }
 `;
-
-const getIconSrc = (fileName: string) => {
-  const parts = fileName.split(".");
-  const ext = parts.at(parts.length - 1);
-  if (!ext) return ImgSrc.UNKNOWN;
-
-  return Langs[ext] ?? ImgSrc.UNKNOWN;
-};
 
 export default LangIcon;

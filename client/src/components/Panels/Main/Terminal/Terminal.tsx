@@ -7,11 +7,11 @@ import "xterm/css/xterm.css";
 import Button from "../../../Button";
 import Progress from "../../../Progress";
 import { useTerminal } from "./useTerminal";
-import { usePkg } from "./usePkg";
 import { Clear, Close, DoubleArrow, Tick } from "../../../Icons";
 import { terminalOutputAtom, terminalProgressAtom } from "../../../../state";
 import { PgCommon, PgEditor, PgTerm, PgTerminal } from "../../../../utils/pg";
 import { EventName } from "../../../../constants";
+import { useExposeStatic } from "../../../../hooks";
 
 const Terminal = () => {
   const [terminalOutput] = useAtom(terminalOutputAtom);
@@ -25,60 +25,27 @@ const Terminal = () => {
 
   // Load xterm
   const term = useMemo(() => {
-    const state = theme.colors.state;
-
     return new PgTerm({
       convertEol: true,
       rendererType: "dom",
       fontSize: 14,
       theme: {
-        brightGreen: state.success.color,
-        brightRed: state.error.color,
-        brightYellow: state.warning.color,
-        brightBlue: state.info.color,
+        brightGreen: theme.colors.state.success.color,
+        brightRed: theme.colors.state.error.color,
+        brightYellow: theme.colors.state.warning.color,
+        brightBlue: theme.colors.state.info.color,
         brightMagenta: theme.colors.default.primary,
         black: theme.colors.default.textSecondary,
         brightCyan: theme.colors.default.secondary,
+        background: theme.colors.terminal?.bg,
+        foreground: theme.colors.terminal?.color,
+        selection: theme.colors.terminal?.selectionBg,
+        cursor: theme.colors.terminal?.cursorColor,
       },
     });
   }, [theme]);
 
-  // Custom keyboard events
-  // Only runs when terminal is in focus
-  const handleCustomEvent = useCallback(
-    (e: KeyboardEvent) => {
-      if (PgCommon.isKeyCtrlOrCmd(e) && e.type === "keydown") {
-        const key = e.key.toUpperCase();
-
-        switch (key) {
-          case "C":
-            if (e.shiftKey) {
-              e.preventDefault();
-              const selection = term.getSelection();
-              navigator.clipboard.writeText(selection);
-              return false;
-            }
-
-            return true;
-
-          case "V":
-            // Ctrl+Shift+V does not work with Firefox but works with Chromium.
-            // We fallback to Ctrl+V for Firefox
-            if (e.shiftKey || PgCommon.isFirefox()) return false;
-
-            return true;
-
-          case "L":
-          case "M":
-          case "J":
-            return false;
-        }
-      }
-
-      return true;
-    },
-    [term]
-  );
+  useExposeStatic(term, EventName.TERMINAL_STATIC);
 
   // Open and fit terminal
   useEffect(() => {
@@ -90,12 +57,10 @@ const Terminal = () => {
       term.open(terminalRef.current);
       term.fit();
 
-      term.attachCustomKeyEventHandler(handleCustomEvent);
-
       // This runs after theme change
       if (hasChild) term.println("");
     }
-  }, [term, handleCustomEvent]);
+  }, [term]);
 
   // New output
   useEffect(() => {
@@ -212,13 +177,6 @@ const Terminal = () => {
     document.addEventListener("keydown", handleKeybinds);
     return () => document.removeEventListener("keydown", handleKeybinds);
   }, [term, height, clear, toggleClose, toggleMaximize]);
-
-  // Set packages
-  const pkgs = usePkg();
-
-  useEffect(() => {
-    if (pkgs) term.setPkgs(pkgs);
-  }, [term, pkgs]);
 
   // Terminal custom events
   useEffect(() => {
@@ -386,9 +344,6 @@ const TerminalWrapper = styled.div`
     height: calc(100% - ${PgTerminal.MIN_HEIGHT}px);
     margin-left: 1rem;
 
-    --color: ${theme.colors.terminal?.color ??
-    theme.colors.default.textPrimary};
-
     & .xterm-viewport {
       background-color: inherit !important;
       width: 100% !important;
@@ -397,15 +352,6 @@ const TerminalWrapper = styled.div`
     & .xterm-rows {
       font-family: ${theme.font?.family} !important;
       font-size: ${theme.font?.size.medium} !important;
-      color: var(--color) !important;
-
-      &.xterm-focus .xterm-cursor.xterm-cursor-block {
-        background-color: var(--color) !important;
-      }
-
-      &:not(.xterm-focus) .xterm-cursor.xterm-cursor-block {
-        outline-color: var(--color) !important;
-      }
     }
   `}
 `;

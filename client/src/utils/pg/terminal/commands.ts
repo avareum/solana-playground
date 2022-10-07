@@ -8,11 +8,13 @@ export class PgCommand {
   static readonly CONNECT = "connect";
   static readonly DEPLOY = "deploy";
   static readonly HELP = "help";
+  static readonly PRETTIER = "prettier";
   static readonly RUN = "run";
   static readonly RUN_LAST_CMD = "!!";
   static readonly RUSTFMT = "rustfmt";
   static readonly SOLANA = "solana";
   static readonly SPL_TOKEN = "spl-token";
+  static readonly SUGAR = "sugar";
   static readonly TEST = "test";
 
   /**
@@ -47,15 +49,15 @@ export class PgCommand {
    * - Solana: (endpoint: string, commitment: string, keypairBytes: Uint8Array)
    * - SPL-Token: (endpoint: string, commitment: string, keypairBytes: Uint8Array)
    */
-  static getCmdArgs(pkg: PkgName) {
-    switch (pkg) {
+  static getCmdArgs(pkgName: PkgName) {
+    switch (pkgName) {
       case PkgName.SOLANA_CLI:
       case PkgName.SPL_TOKEN_CLI:
         return [
           PgConnection.endpoint,
           PgConnection.commitment,
           PgWallet.keypairBytes,
-        ];
+        ] as [string, string, Uint8Array];
     }
   }
 }
@@ -86,6 +88,14 @@ const COMMANDS: Command[] = [
     description: "Deploy your program",
   },
   {
+    name: PgCommand.PRETTIER,
+    description: "Format the current file with prettier",
+  },
+  {
+    name: PgCommand.RUN,
+    description: "Run all scripts in client directory",
+  },
+  {
     name: PgCommand.RUSTFMT,
     description: "Format the current file with rustfmt",
   },
@@ -95,6 +105,10 @@ const COMMANDS: Command[] = [
   },
   {
     name: PgCommand.SPL_TOKEN,
-    description: "Commands related to SPL Token",
+    description: "Commands for interacting with SPL Tokens",
+  },
+  {
+    name: PgCommand.TEST,
+    description: "Run all tests in tests directory",
   },
 ];

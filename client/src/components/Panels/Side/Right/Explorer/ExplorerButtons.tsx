@@ -22,9 +22,9 @@ const ExplorerButtons = () => (
 );
 
 const ButtonsWrapper = styled.div`
-  padding: 0.25rem;
   display: flex;
   justify-content: flex-end;
+  padding: 0.25rem;
 
   & button {
     margin: 0.5rem 0;

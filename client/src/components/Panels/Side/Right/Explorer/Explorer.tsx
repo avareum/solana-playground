@@ -1,18 +1,21 @@
 import { useEffect } from "react";
+import { useAtom } from "jotai";
 import styled from "styled-components";
 
 import ExplorerButtons from "./ExplorerButtons";
 import Folders from "./Folders";
 import Workspaces from "./Workspaces";
+import NoWorkspace from "./NoWorkspace";
 import useExplorerContextMenu from "./useExplorerContextMenu";
 import useNewItem from "./useNewItem";
-import { PgEditor } from "../../../../../utils/pg";
-import { useAtom } from "jotai";
 import { explorerAtom } from "../../../../../state";
-import NoWorkspace from "./NoWorkspace";
+import { EventName } from "../../../../../constants";
+import { useExposeStatic } from "../../../../../hooks";
 
 const Explorer = () => {
   const [explorer] = useAtom(explorerAtom);
+
+  useExposeStatic(explorer, EventName.EXPLORER_STATIC);
 
   const { newItem } = useNewItem();
   const { renameItem, deleteItem } = useExplorerContextMenu();
@@ -22,9 +25,7 @@ const Explorer = () => {
     const handleKey = (e: globalThis.KeyboardEvent) => {
       if (e.altKey && e.key.toUpperCase() === "N") newItem();
       else if (e.key === "F2") renameItem();
-      else if (e.key === "Delete" && !PgEditor.isFocused()) {
-        deleteItem();
-      }
+      else if (e.key === "Delete") deleteItem();
     };
 
     document.addEventListener("keydown", handleKey);
@@ -37,8 +38,10 @@ const Explorer = () => {
 
   return (
     <ExplorerWrapper>
-      <Workspaces />
-      <ExplorerButtons />
+      <ExplorerTopWrapper>
+        <Workspaces />
+        <ExplorerButtons />
+      </ExplorerTopWrapper>
       <Folders />
     </ExplorerWrapper>
   );
@@ -49,6 +52,9 @@ const ExplorerWrapper = styled.div`
   flex-direction: column;
   width: 100%;
   user-select: none;
+`;
+
+const ExplorerTopWrapper = styled.div`
   padding: 0 0.5rem;
 `;
 

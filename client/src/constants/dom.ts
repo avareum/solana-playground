@@ -1,4 +1,5 @@
 export enum ClassName {
+  ACTIVE = "active",
   ERROR = "error",
   SUCCESS = "success",
   OPEN = "open",
@@ -6,14 +7,18 @@ export enum ClassName {
   TOUCHED = "touched",
   SELECTED = "selected",
   CTX_SELECTED = "ctx-selected",
-  ACTIVE = "active",
   FILE = "file",
   FOLDER = "folder",
+  FOLDER_INSIDE = "folder-inside",
   SIDE_RIGHT = "side-right",
   LOADING = "loading",
   DARKEN = "darken",
   ICON_CHECKMARK = "icon-checkmark",
   TOOLTIP = "tooltip",
+
+  // Editor
+  CM_CLASSNAME = "cm-editor",
+  CM_ACTIVE_CLASSNAME = "cm-focused",
 }
 
 export enum Id {

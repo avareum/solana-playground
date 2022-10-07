@@ -127,29 +127,6 @@ export class PgCommon {
   }
 
   /**
-   * @returns whether a given string is parseable to an int
-   */
-  static isInt(str: string) {
-    const intRegex = /^-?\d+$/;
-    if (!intRegex.test(str)) return false;
-
-    const int = parseInt(str, 10);
-    return parseFloat(str) === int && !isNaN(int);
-  }
-
-  /**
-   * @returns whether a given string is parseable to a float
-   */
-  static isFloat(str: string) {
-    const floatRegex = /^-?\d+(?:[.,]\d*?)?$/;
-    if (!floatRegex.test(str)) return false;
-
-    const float = parseFloat(str);
-    if (isNaN(float)) return false;
-    return true;
-  }
-
-  /**
    * Calculate basic rem operations for css
    */
   static calculateRem(
@@ -209,15 +186,6 @@ export class PgCommon {
   }
 
   /**
-   * Dispatch a custom DOM event
-   */
-  static createAndDispatchCustomEvent(name: string, detail?: any) {
-    const customEvent = new CustomEvent(name, { detail });
-
-    document.dispatchEvent(customEvent);
-  }
-
-  /**
    * @returns camelCase converted version of the string input
    */
   static toCamelCase(str: string) {
@@ -241,5 +209,73 @@ export class PgCommon {
       default:
         return null;
     }
+  }
+
+  /**
+   * Dispatch a custom DOM event
+   *
+   * @param name custom event name
+   * @param detail data to send with the custom event
+   */
+  static createAndDispatchCustomEvent(name: string, detail?: any) {
+    const customEvent = new CustomEvent(name, { detail });
+    document.dispatchEvent(customEvent);
+  }
+
+  /**
+   * Get send and receive event names
+   *
+   * @param eventName name of the custom event
+   * @returns names of the send and receive
+   */
+  static getSendAndReceiveEventNames(eventName: string) {
+    const send = eventName + "send";
+    const receive = eventName + "receive";
+    return { send, receive };
+  }
+
+  /**
+   * Get static get and run event names
+   *
+   * @param eventName name of the custom event
+   * @returns names of the get and run
+   */
+  static getStaticEventNames(eventName: string) {
+    const get = eventName + "get";
+    const run = eventName + "run";
+    return { get, run };
+  }
+
+  /**
+   * Dispatch a custom event and wait for receiver to resolve
+   *
+   * @param eventName name of the custom event
+   * @param data data to send
+   * @returns the resolved data
+   */
+  static async sendAndReceiveCustomEvent<A, R>(
+    eventName: string,
+    data?: A
+  ): Promise<R> {
+    const eventNames = this.getSendAndReceiveEventNames(eventName);
+
+    // Send data
+    this.createAndDispatchCustomEvent(eventNames.send, data);
+
+    // Wait for data
+    return new Promise((res) => {
+      const handleReceive = (e: UIEvent & { detail: { data: R } }) => {
+        document.removeEventListener(
+          eventNames.receive,
+          handleReceive as EventListener
+        );
+        res(e.detail?.data);
+      };
+
+      document.addEventListener(
+        eventNames.receive,
+        handleReceive as EventListener
+      );
+    });
   }
 }

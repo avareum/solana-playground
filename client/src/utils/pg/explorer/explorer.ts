@@ -6,8 +6,16 @@ import { PgGithub } from "./github";
 import { PgWorkspace, Workspaces } from "./workspace";
 import { PgProgramInfo, ProgramInfo } from "../program-info";
 import { ShareJSON } from "../share";
-import { ClassName, Id, ItemError, WorkspaceError } from "../../../constants";
+import {
+  ClassName,
+  EventName,
+  Id,
+  ItemError,
+  WorkspaceError,
+} from "../../../constants";
 import { Lang } from "./frameworks";
+import { PgMethod, PgReturnType, TupleString } from "../types";
+import { PgCommon } from "../common";
 
 export interface ExplorerJSON {
   files: {
@@ -49,23 +57,21 @@ export interface Folder {
 /** Array<[Path, Content]> */
 export type Files = TupleString[];
 
-export type TupleString = [string, string];
-
 /**
  * Class that has both static and non-static methods for explorer.
  */
 export class PgExplorer {
   /** Non-static methods */
 
-  // Internal state
+  /** Internal state */
   private _explorer: ExplorerJSON;
-  // IndexedDB FS object
+  /** IndexedDB FS object */
   private _fs?: PromisifiedFS;
-  // Workspace functionality
+  /** Workspace functionality */
   private _workspace?: PgWorkspace;
-  // Whether the user is on a shared page
+  /** Whether the user is on a shared page */
   private _shared?: boolean;
-  // To update ui
+  /** To update ui */
   private _refresh: () => void;
 
   /**
@@ -96,7 +102,11 @@ export class PgExplorer {
     return this._explorer.files;
   }
 
-  /** Get full path of current workspace('/' appended) */
+  /**
+   * Get full path of current workspace('/' appended)
+   *
+   * @throws if the workspace doesn't exist. Shouldn't be called on shared projects.
+   */
   get currentWorkspacePath() {
     if (!this.currentWorkspaceName) {
       throw new Error(WorkspaceError.CURRENT_NOT_FOUND);
@@ -159,6 +169,7 @@ export class PgExplorer {
     // Sets up the files from IndexedDB to the state
     const setupFiles = async (path: string) => {
       const itemNames = await fs.readdir(path);
+
       if (!itemNames.length) {
         // Empty directory
         this.files[path] = {};
@@ -166,7 +177,10 @@ export class PgExplorer {
       }
 
       const subItemPaths = itemNames.map(
-        (itemName) => PgExplorer.appendSlash(path) + itemName
+        (itemName) =>
+          PgExplorer.appendSlash(path) +
+          itemName +
+          (PgExplorer.getItemTypeFromName(itemName).folder ? "/" : "")
       );
       for (const subItemPath of subItemPaths) {
         const stat = await fs.stat(subItemPath);
@@ -181,7 +195,19 @@ export class PgExplorer {
 
     try {
       await setupFiles(this.currentWorkspacePath);
-    } catch {
+    } catch (e: any) {
+      console.log(e.message);
+
+      // This helps with in rare case where user logs out during rename
+      if (this._workspace.allNames.length) {
+        const rootDirs = await fs.readdir(PgExplorer.PATHS.ROOT_DIR_PATH);
+        const lastWorkspaceName = rootDirs[rootDirs.length - 1];
+        this._workspace.rename(lastWorkspaceName);
+        await this.init(lastWorkspaceName);
+
+        return;
+      }
+
       console.log(
         "Couldn't setup files from IndexedDB. Probably need initial setup."
       );
@@ -206,7 +232,10 @@ export class PgExplorer {
           const oldData = lsFiles[path];
           delete lsFiles[path];
           lsFiles[
-            path.replace(PgExplorer.ROOT_DIR_PATH, this.currentWorkspacePath)
+            path.replace(
+              PgExplorer.PATHS.ROOT_DIR_PATH,
+              this.currentWorkspacePath
+            )
           ] = {
             content: oldData.content,
             // @ts-ignore // ignoring because the type of oldData changed
@@ -269,7 +298,7 @@ export class PgExplorer {
 
     const metaFile: ItemMetaFile = {};
     for (const path in files) {
-      metaFile[this._getRelativePath(path)] = { ...files[path].meta };
+      metaFile[this.getRelativePath(path)] = { ...files[path].meta };
     }
 
     await this._writeFile(this._metadataPath, JSON.stringify(metaFile), true);
@@ -306,7 +335,11 @@ export class PgExplorer {
    * - Name and path checks
    * - Create item in the state
    */
-  async newItem(fullPath: string) {
+  async newItem(
+    fullPath: string,
+    content: string = "",
+    opts?: { override?: boolean }
+  ) {
     // Invalid name
     if (
       !PgExplorer.isItemNameValid(PgExplorer.getItemNameFromPath(fullPath)!)
@@ -317,7 +350,9 @@ export class PgExplorer {
     const files = this.files;
 
     // Already exists
-    if (files[fullPath]) throw new Error(ItemError.ALREADY_EXISTS);
+    if (files[fullPath] && !opts?.override) {
+      throw new Error(ItemError.ALREADY_EXISTS);
+    }
 
     const itemType = PgExplorer.getItemTypeFromPath(fullPath);
 
@@ -325,17 +360,20 @@ export class PgExplorer {
     // state will not change. Can't say the same if the ordering was in reverse.
     if (itemType.file) {
       if (!this.isShared) {
-        await this._writeFile(fullPath, "", true);
+        await this._writeFile(fullPath, content, true);
         await this.saveMeta();
       }
 
       files[fullPath] = {
-        content: "",
+        content,
         meta: {
           current: true,
           tabs: true,
         },
       };
+
+      // Close the file if we are overriding to correctly display the new content
+      if (opts?.override) this.closeTab(fullPath);
 
       this.changeCurrentFile(fullPath);
     } else {
@@ -556,13 +594,10 @@ export class PgExplorer {
     // Create a new workspace in state
     this._workspace.new(name);
 
-    // Create src folder
-    await this._mkdir(this._getCurrentSrcPath(), true);
-
     // Create files
     if (options?.files) {
       for (const pathContent of options?.files) {
-        const fullPath = this._getCurrentSrcPath() + pathContent[0];
+        const fullPath = this.currentWorkspacePath + pathContent[0];
         const content = pathContent[1];
         await this._writeFile(fullPath, content, true);
       }
@@ -596,7 +631,7 @@ export class PgExplorer {
     // Open the lib file if it has been specified
     if (options?.defaultOpenFile) {
       this.changeCurrentFile(
-        this._getCurrentSrcPath() + options.defaultOpenFile
+        this.currentWorkspacePath + options.defaultOpenFile
       );
     }
 
@@ -674,7 +709,7 @@ export class PgExplorer {
 
       for (const subItemPath of subItemPaths) {
         const stat = await fs.stat(subItemPath);
-        const relativePath = this._getRelativePath(subItemPath);
+        const relativePath = this.getRelativePath(subItemPath);
         if (stat.isFile()) {
           const content = await this._readToString(subItemPath);
           zip.file(relativePath, content);
@@ -704,6 +739,23 @@ export class PgExplorer {
       files,
       defaultOpenFile: files.length === 1 ? files[0][0] : "lib.rs",
     });
+  }
+
+  /**
+   * @returns whether the given path exists
+   */
+  async exists(path: string) {
+    try {
+      const fs = this._getFs();
+      await fs.stat(path);
+      return true;
+    } catch (e: any) {
+      if (e.code === "ENOENT" || e.code === "ENOTDIR") return false;
+      else {
+        console.log("Unknown error in exists: ", e);
+        throw e;
+      }
+    }
   }
 
   /** State methods */
@@ -767,6 +819,8 @@ export class PgExplorer {
     const curFile = this.getCurrentFile();
 
     if (curFile) {
+      if (newPath === curFile.path) return;
+
       files[curFile.path].meta = {
         ...files[curFile.path].meta,
         current: false,
@@ -820,6 +874,16 @@ export class PgExplorer {
   }
 
   /**
+   * Get file content from the state
+   *
+   * @param path full path to the file
+   * @returns the file content from the state
+   */
+  getFileContent(path: string) {
+    return this.files[path]?.content;
+  }
+
+  /**
    * Gets items inside the folder and groups them into `folders` and `files`
    */
   getFolderContent(path: string) {
@@ -843,6 +907,17 @@ export class PgExplorer {
     }
 
     return filesAndFolders;
+  }
+
+  /**
+   * @param path path to be appended after the current workspace path
+   * @returns full path based on the input
+   */
+  appendToCurrentWorkspacePath(path: string) {
+    return PgExplorer.appendSlash(
+      this.currentWorkspacePath +
+        (path.startsWith("/") ? path.substring(1) : path)
+    );
   }
 
   /**
@@ -904,7 +979,7 @@ export class PgExplorer {
         // We are removing the workspace from path because build only needs /src
         path = path.replace(
           this.currentWorkspacePath,
-          PgExplorer.ROOT_DIR_PATH
+          PgExplorer.PATHS.ROOT_DIR_PATH
         );
 
         buildFiles.push([path, updatedContent]);
@@ -930,7 +1005,10 @@ export class PgExplorer {
       const itemInfo = files[path];
 
       // We are removing the workspace from path because share only needs /src
-      path = path.replace(this.currentWorkspacePath, PgExplorer.ROOT_DIR_PATH);
+      path = path.replace(
+        this.currentWorkspacePath,
+        PgExplorer.PATHS.ROOT_DIR_PATH
+      );
 
       // To make it backwards compatible with the old shares
       shareFiles.files[path] = {
@@ -951,22 +1029,12 @@ export class PgExplorer {
    * @returns the current language name
    */
   getCurrentFileLanguage() {
-    const splitByDot = this.getCurrentFile()?.path.split(".");
-    if (!splitByDot?.length) {
-      return null;
-    }
-
-    const langExtension = splitByDot[splitByDot.length - 1];
-    switch (langExtension) {
-      case "rs":
-        return Lang.RUST;
-      case "py":
-        return Lang.PYTHON;
-      case "js":
-        return Lang.JAVASCRIPT;
-      case "ts":
-        return Lang.TYPESCRIPT;
-    }
+    const currentPath = this.getCurrentFile()?.path;
+    if (!currentPath) return null;
+    const path = this.isShared
+      ? currentPath
+      : this.getRelativePath(currentPath);
+    return PgExplorer.getLanguageFromPath(path);
   }
 
   /**
@@ -984,17 +1052,31 @@ export class PgExplorer {
   }
 
   /**
-   * @returns whether the current file in the state is a Javascript file
+   * @returns whether the current file in the state is a Typescript test file
    */
-  isCurrentFileJavascript() {
-    return this.getCurrentFileLanguage() === Lang.JAVASCRIPT;
+  isCurrentFileJsLike() {
+    switch (this.getCurrentFileLanguage()) {
+      case Lang.JAVASCRIPT:
+      case Lang.TYPESCRIPT:
+      case Lang.JAVASCRIPT_TEST:
+      case Lang.TYPESCRIPT_TEST:
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**
-   * @returns whether the current file in the state is a Typescript file
+   * @returns whether the current file in the state is a Typescript test file
    */
-  isCurrentFileTypescript() {
-    return this.getCurrentFileLanguage() === Lang.TYPESCRIPT;
+  isCurrentFileJsLikeTest() {
+    switch (this.getCurrentFileLanguage()) {
+      case Lang.JAVASCRIPT_TEST:
+      case Lang.TYPESCRIPT_TEST:
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**
@@ -1018,8 +1100,17 @@ export class PgExplorer {
    * @param fullPath Full path
    * @returns Relative path
    */
-  _getRelativePath(fullPath: string) {
-    return fullPath.split(this.currentWorkspacePath)[1];
+  getRelativePath(fullPath: string) {
+    if (this.isShared) {
+      return fullPath;
+    }
+
+    const split = fullPath.split(this.currentWorkspacePath);
+    if (split.length === 1) {
+      return split[0];
+    }
+
+    return split[1];
   }
 
   /** Private methods */
@@ -1036,23 +1127,6 @@ export class PgExplorer {
   }
 
   /**
-   * @returns whether the given path exists
-   */
-  private async _exists(path: string) {
-    try {
-      const fs = this._getFs();
-      await fs.stat(path);
-      return true;
-    } catch (e: any) {
-      if (e.code === "ENOENT" || e.code === "ENOTDIR") return false;
-      else {
-        console.log("Unknown error in _exists: ", e);
-        throw e;
-      }
-    }
-  }
-
-  /**
    * Creates new directory with create parents optionality
    */
   private async _mkdir(path: string, createParents?: boolean) {
@@ -1065,7 +1139,7 @@ export class PgExplorer {
         _path += "/" + folders[i];
 
         // Only create if the dir doesn't exist
-        const exists = await this._exists(_path);
+        const exists = await this.exists(_path);
         if (!exists) await fs.mkdir(_path);
       }
     } else {
@@ -1188,11 +1262,13 @@ export class PgExplorer {
   }
 
   /**
-   *
-   * @returns current workspace's src directory path
+   * @returns current src directory path
    */
   private _getCurrentSrcPath() {
-    return this.currentWorkspacePath + "src/";
+    const srcPath = this.isShared
+      ? PgExplorer.PATHS.ROOT_DIR_PATH + PgExplorer.PATHS.SRC_DIRNAME
+      : this.appendToCurrentWorkspacePath(PgExplorer.PATHS.SRC_DIRNAME);
+    return PgExplorer.appendSlash(srcPath);
   }
 
   /**
@@ -1200,7 +1276,7 @@ export class PgExplorer {
    * @returns the full path to the workspace root dir with '/' at the end
    */
   private _getWorkspacePath(name: string) {
-    return PgExplorer.ROOT_DIR_PATH + PgExplorer.appendSlash(name);
+    return PgExplorer.PATHS.ROOT_DIR_PATH + PgExplorer.appendSlash(name);
   }
 
   /**
@@ -1215,10 +1291,49 @@ export class PgExplorer {
   }
 
   /** Static methods */
-  static readonly ROOT_DIR_PATH = "/";
+  static readonly PATHS = {
+    ROOT_DIR_PATH: "/",
+    SRC_DIRNAME: "src",
+    CLIENT_DIRNAME: "client",
+    TESTS_DIRNAME: "tests",
+    METAPLEX_DIRNAME: "nft",
+    get CANDY_MACHINE_DIR_PATH() {
+      return PgExplorer.joinPaths([this.METAPLEX_DIRNAME, "candy-machine"]);
+    },
+    get CANDY_MACHINE_CONFIG_FILEPATH() {
+      return PgExplorer.joinPaths([this.CANDY_MACHINE_DIR_PATH, "config.json"]);
+    },
+  };
 
   /** Don't change this! */
   private static readonly _INDEXED_DB_NAME = "solana-playground";
+
+  /**
+   * Statically get the explorer object from state
+   *
+   * @returns the explorer object
+   */
+  static async get<T, R extends PgExplorer>() {
+    return await PgCommon.sendAndReceiveCustomEvent<T, R>(
+      PgCommon.getStaticEventNames(EventName.EXPLORER_STATIC).get
+    );
+  }
+
+  /**
+   * Run any method of explorer in state from anywhere
+   *
+   * @param data method and its data to run
+   * @returns the result from the method call
+   */
+  static async run<
+    M extends PgMethod<PgExplorer>,
+    R extends PgReturnType<PgExplorer, keyof M>
+  >(data: M) {
+    return await PgCommon.sendAndReceiveCustomEvent<M, R>(
+      PgCommon.getStaticEventNames(EventName.EXPLORER_STATIC).run,
+      data
+    );
+  }
 
   static getItemNameFromPath(path: string) {
     const itemsArr = path.split("/");
@@ -1239,7 +1354,7 @@ export class PgExplorer {
     return { file: true };
   }
 
-  static getItemTypeFromEl = (el: HTMLDivElement) => {
+  static getItemTypeFromEl(el: HTMLDivElement) {
     if (el.classList.contains(ClassName.FOLDER)) {
       return { folder: true };
     } else if (el.classList.contains(ClassName.FILE)) {
@@ -1247,11 +1362,61 @@ export class PgExplorer {
     }
 
     return null;
-  };
+  }
 
-  static getItemPathFromEl = (el: HTMLDivElement) => {
+  static getItemPathFromEl(el: HTMLDivElement) {
     return el?.getAttribute("data-path");
-  };
+  }
+
+  static getLanguageFromPath(path: string = "") {
+    const splitByDot = path.split(".");
+    if (!splitByDot?.length) {
+      return null;
+    }
+
+    let langExtension;
+    if (splitByDot.length === 2) {
+      langExtension = splitByDot[splitByDot.length - 1];
+    } else {
+      langExtension =
+        splitByDot[splitByDot.length - 2] + splitByDot[splitByDot.length - 1];
+    }
+
+    switch (langExtension) {
+      case "rs":
+        return Lang.RUST;
+      case "py":
+        return Lang.PYTHON;
+      case "js":
+        return Lang.JAVASCRIPT;
+      case "ts":
+        return Lang.TYPESCRIPT;
+      case "testjs":
+        return Lang.JAVASCRIPT_TEST;
+      case "testts":
+        return Lang.TYPESCRIPT_TEST;
+    }
+  }
+
+  static getIsItemClientFromEl(el: HTMLDivElement) {
+    const path = this.getItemPathFromEl(el);
+    if (!path) return false;
+    const lang = this.getLanguageFromPath(path);
+    return (
+      !!path &&
+      !path.includes(".test") &&
+      (lang === Lang.JAVASCRIPT || lang === Lang.TYPESCRIPT)
+    );
+  }
+
+  static getIsItemTestFromEl(el: HTMLDivElement) {
+    const path = this.getItemPathFromEl(el);
+    if (!path) return false;
+    const lang = this.getLanguageFromPath(path);
+    return (
+      !!path && (lang === Lang.JAVASCRIPT_TEST || lang === Lang.TYPESCRIPT_TEST)
+    );
+  }
 
   /**
    * Gets the parent folder path with '/' appended at the end.
@@ -1309,8 +1474,16 @@ export class PgExplorer {
   };
 
   static getCtxSelectedEl() {
-    return document.getElementsByClassName(ClassName.CTX_SELECTED)[0];
+    const ctxSelectedEls = document.getElementsByClassName(
+      ClassName.CTX_SELECTED
+    );
+    if (ctxSelectedEls.length) return ctxSelectedEls[0];
   }
+
+  static setCtxSelectedEl = (newEl: HTMLDivElement) => {
+    this.removeCtxSelectedEl();
+    newEl.classList.add(ClassName.CTX_SELECTED);
+  };
 
   static removeCtxSelectedEl() {
     this.getCtxSelectedEl()?.classList.remove(ClassName.CTX_SELECTED);
@@ -1349,19 +1522,29 @@ export class PgExplorer {
   }
 
   static collapseAllFolders() {
-    let rootEl = this.getRootFolderEl();
+    const rootEl = this.getRootFolderEl();
+    if (!rootEl) return;
 
-    for (;;) {
-      if (!rootEl || !rootEl.childElementCount) break;
-      // Close folder
-      rootEl.children[0]?.classList.remove(ClassName.OPEN);
-      rootEl.children[1]?.classList.add(ClassName.HIDDEN);
-      // Remove selected
-      const selectedEl = this.getSelectedEl();
-      if (selectedEl) selectedEl.classList.remove(ClassName.SELECTED);
+    // Remove selected
+    const selectedEl = this.getSelectedEl();
+    if (selectedEl) selectedEl.classList.remove(ClassName.SELECTED);
 
-      rootEl = rootEl?.children[1] as HTMLElement;
-    }
+    const recursivelyCollapse = (el: HTMLElement) => {
+      if (!el || !el.childElementCount) return;
+
+      // Close folders
+      el.childNodes.forEach((child) => {
+        const c = child as HTMLElement;
+        if (c.classList.contains(ClassName.FOLDER)) {
+          c.classList.remove(ClassName.OPEN);
+        } else if (c.classList.contains(ClassName.FOLDER_INSIDE)) {
+          c.classList.add(ClassName.HIDDEN);
+          recursivelyCollapse(c);
+        }
+      });
+    };
+
+    recursivelyCollapse(rootEl);
   }
 
   static isItemNameValid(name: string) {
@@ -1379,5 +1562,15 @@ export class PgExplorer {
   static appendSlash(path: string) {
     if (!path) return "";
     return path + (path.endsWith("/") ? "" : "/");
+  }
+
+  static withoutPreSlash(path: string) {
+    return path[0] === "/" ? path.substring(1) : path;
+  }
+
+  static joinPaths(paths: string[]) {
+    return paths.reduce(
+      (acc, cur) => this.appendSlash(acc) + this.withoutPreSlash(cur)
+    );
   }
 }

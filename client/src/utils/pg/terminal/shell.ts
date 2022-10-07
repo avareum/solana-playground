@@ -1,5 +1,5 @@
 import { PgTty } from "./tty";
-import ShellHistory from "./shell-history";
+import { PgShellHistory } from "./shell-history";
 import {
   ActiveCharPrompt,
   ActivePrompt,
@@ -12,9 +12,9 @@ import {
 import { PgTerminal } from "./terminal";
 import { PgWallet } from "../wallet";
 import { PgCommand } from "./commands";
-import { PkgName, Pkgs } from "./pkg";
-import { TerminalAction } from "../../../state";
+import { PgPkg, PkgName } from "./pkg";
 import { PgCommon } from "../common";
+import { TerminalAction } from "../../../state";
 import { Lang } from "../explorer";
 import { EventName } from "../../../constants";
 
@@ -31,13 +31,15 @@ type ShellOptions = { historySize: number; maxAutocompleteEntries: number };
  */
 export class PgShell {
   private _pgTty: PgTty;
-  private _history: ShellHistory;
+  private _history: PgShellHistory;
   private _active: boolean;
+  private _waitingForInput: boolean;
+  private _processCount: number;
   private _maxAutocompleteEntries: number;
   private _autocompleteHandlers: AutoCompleteHandler[];
+  private _loadedPkgs: { [pkgName: string]: boolean };
   private _activePrompt?: ActivePrompt;
   private _activeCharPrompt?: ActiveCharPrompt;
-  private _pkgs?: Pkgs;
 
   constructor(
     pgTty: PgTty,
@@ -47,7 +49,7 @@ export class PgShell {
     }
   ) {
     this._pgTty = pgTty;
-    this._history = new ShellHistory(options.historySize);
+    this._history = new PgShellHistory(options.historySize);
 
     this._maxAutocompleteEntries = options.maxAutocompleteEntries;
     this._autocompleteHandlers = [
@@ -56,6 +58,9 @@ export class PgShell {
       },
     ];
     this._active = false;
+    this._waitingForInput = false;
+    this._processCount = 0;
+    this._loadedPkgs = {};
   }
 
   /**
@@ -65,14 +70,11 @@ export class PgShell {
     return this._history;
   }
 
-  setPkgs(pkgs: Pkgs) {
-    this._pkgs = pkgs;
-  }
-
   /**
    * Disable shell
    */
   disable() {
+    this._incrementProcessCount();
     this._active = false;
   }
 
@@ -84,9 +86,12 @@ export class PgShell {
    */
   enable() {
     setTimeout(() => {
-      this._active = true;
-      this.prompt();
-      this._pgTty.read(""); // Enables history
+      this._decrementProcessCount();
+      if (!this._processCount) {
+        this._active = true;
+        this.prompt();
+        this._pgTty.read(""); // Enables history
+      }
     }, 10);
   }
 
@@ -102,22 +107,19 @@ export class PgShell {
     }
 
     try {
-      this._activePrompt = this._pgTty.read(PgTerminal.PROMPT);
+      const promptText = this._waitingForInput
+        ? PgTerminal.WAITING_INPUT_PROMPT_PREFIX
+        : PgTerminal.PROMPT_PREFIX;
+      this._activePrompt = this._pgTty.read(promptText);
       this._active = true;
-      let line = await this._activePrompt.promise;
-
-      if (line === "") {
-        this.prompt();
-        return;
-      }
 
       if (this._history) {
+        await this._activePrompt.promise;
         const input = this._pgTty.getInput().trim();
         this._history.push(input);
       }
     } catch (e: any) {
       this._pgTty.println(e.message);
-
       this.prompt();
     }
   }
@@ -163,19 +165,23 @@ export class PgShell {
       this._activePrompt = undefined;
     }
 
-    if (clearCmd) this._pgTty.clearCurrentLine();
+    if (clearCmd) this._pgTty.clearLine();
     else this._pgTty.print("\r\n");
 
     this._active = false;
 
-    this._parseCommand(input);
+    if (this._waitingForInput) {
+      PgCommon.createAndDispatchCustomEvent(EventName.TERMINAL_WAIT_FOR_INPUT);
+    } else {
+      this._parseCommand(input);
+    }
   };
 
   /**
    * Handle terminal -> tty input
    */
   handleTermData = (data: string) => {
-    // Only Allow CTRL+C Through
+    // Only Allow CTRL+C through
     if (!this._active && data !== "\x03") {
       return;
     }
@@ -214,6 +220,42 @@ export class PgShell {
       this._handleData(data);
     }
   };
+
+  /**
+   * Wait for user input
+   *
+   * @param msg Message to print to the terminal before prompting user
+   * @returns user input
+   */
+  async waitForUserInput(msg: string): Promise<string> {
+    return new Promise((res, rej) => {
+      if (this._waitingForInput) rej("Already waiting for input.");
+      else {
+        this._waitingForInput = true;
+        this._pgTty.clearLine();
+        this._pgTty.println(
+          PgTerminal.secondary(PgTerminal.WAITING_INPUT_MSG_PREFIX) + msg
+        );
+        this.enable();
+
+        // This will happen once user submits the input
+        const handleInput = () => {
+          this._waitingForInput = false;
+          document.removeEventListener(
+            EventName.TERMINAL_WAIT_FOR_INPUT,
+            handleInput
+          );
+          const input = this._pgTty.getInput();
+          res(input);
+        };
+
+        document.addEventListener(
+          EventName.TERMINAL_WAIT_FOR_INPUT,
+          handleInput
+        );
+      }
+    });
+  }
 
   /**
    * Move cursor at given direction
@@ -484,17 +526,34 @@ export class PgShell {
   };
 
   /**
-   * This function runs when user presses `Enter` in terminal
-   * @returns whether the command is valid
+   * Increments active process count
+   */
+  private _incrementProcessCount() {
+    this._processCount++;
+  }
+
+  /**
+   * Decrements active process count if process count is gt 0
+   */
+  private _decrementProcessCount() {
+    if (this._processCount) {
+      this._processCount--;
+    }
+  }
+
+  // TODO: Move this to `PgCommands` and keep state for cmd and pkg management
+  /**
+   * Runs after pressesing `Enter` in terminal
    */
   private _parseCommand(cmd: string) {
-    cmd = cmd.trim();
-    let isCmdValid = false;
-    switch (cmd) {
+    // This guarantees command only start with the specified command name
+    // solana-keygen would not count for cmdName === "solana"
+    const cmdName = cmd.trim().split(" ")?.at(0);
+
+    switch (cmdName) {
       case PgCommand.BUILD: {
         PgTerminal.setTerminalState(TerminalAction.buildStart);
-        isCmdValid = true;
-        break;
+        return;
       }
 
       case PgCommand.CLEAR: {
@@ -503,35 +562,60 @@ export class PgShell {
         // Clear all
         this._pgTty.clear();
         this.prompt();
-        isCmdValid = true;
-        break;
+        return;
       }
 
       case PgCommand.CONNECT: {
         PgTerminal.setTerminalState(TerminalAction.walletConnectOrSetupStart);
-        isCmdValid = true;
-        break;
+        return;
       }
 
       case PgCommand.DEPLOY: {
         if (PgWallet.checkIsPgConnected()) {
           PgTerminal.setTerminalState(TerminalAction.deployStart);
         }
-        isCmdValid = true;
-        break;
+        return;
       }
 
       case PgCommand.HELP: {
         PgTerminal.logWasm(PgCommand.help());
         this.enable();
-        isCmdValid = true;
-        break;
+        return;
       }
 
-      case PgCommand.RUN: {
-        PgCommon.createAndDispatchCustomEvent(EventName.CLIENT_RUN);
-        isCmdValid = true;
-        break;
+      case PgCommand.PRETTIER: {
+        PgCommon.createAndDispatchCustomEvent(EventName.EDITOR_FORMAT, {
+          lang: Lang.TYPESCRIPT,
+          fromTerminal: true,
+        });
+        return;
+      }
+
+      // Special command
+      case PgCommand.RUN_LAST_CMD: {
+        // Run the last command
+        const entries = this._history.getEntries();
+        if (!entries.length) {
+          this._pgTty.println("No previous command.");
+          this.enable();
+        } else {
+          const lastCmd = entries[entries.length - 1];
+          this._parseCommand(lastCmd);
+        }
+
+        return;
+      }
+
+      case PgCommand.RUN:
+      case PgCommand.TEST: {
+        const regex = new RegExp(/^\w+\s?(.*)/);
+        const match = regex.exec(cmd);
+        PgCommon.createAndDispatchCustomEvent(EventName.CLIENT_RUN, {
+          isTest: cmd.startsWith(PgCommand.TEST),
+          path: match && match[1],
+        });
+
+        return;
       }
 
       case PgCommand.RUSTFMT: {
@@ -539,80 +623,70 @@ export class PgShell {
           lang: Lang.RUST,
           fromTerminal: true,
         });
-        isCmdValid = true;
-        break;
+        return;
       }
 
-      case PgCommand.TEST: {
-        PgCommon.createAndDispatchCustomEvent(EventName.CLIENT_RUN, {
-          isTest: true,
-        });
-        isCmdValid = true;
-      }
-    }
-
-    // This guarantees command only start with the specified command name
-    // solana-keygen would not count for cmdName === "solana"
-    const cmdName = cmd.split(" ")?.at(0);
-
-    switch (cmdName) {
       case PgCommand.SOLANA: {
         if (PgWallet.checkIsPgConnected()) {
-          if (this._pkgs?.runSolana) {
-            this._pkgs.runSolana(
-              cmd,
-              // @ts-ignore
-              ...PgCommand.getCmdArgs(PkgName.SOLANA_CLI)
-            );
-          } else {
-            PgTerminal.loadPkg(PkgName.SOLANA_CLI);
-          }
+          (async () => {
+            const initial = !this._loadedPkgs[PkgName.SOLANA_CLI];
+            if (initial) {
+              this._loadedPkgs[PkgName.SOLANA_CLI] = true;
+            }
+            const { runSolana } = await PgPkg.loadPkg(PgPkg.SOLANA_CLI, {
+              log: initial,
+            });
+
+            runSolana!(cmd, ...PgCommand.getCmdArgs(PkgName.SOLANA_CLI)!);
+          })();
         }
 
-        isCmdValid = true;
-        break;
+        return;
       }
 
       case PgCommand.SPL_TOKEN: {
         if (PgWallet.checkIsPgConnected()) {
-          if (this._pkgs?.runSplToken) {
-            this._pkgs.runSplToken(
-              cmd,
-              // @ts-ignore
-              ...PgCommand.getCmdArgs(PkgName.SPL_TOKEN_CLI)
-            );
-          } else {
-            PgTerminal.loadPkg(PkgName.SPL_TOKEN_CLI);
-          }
+          (async () => {
+            const initial = !this._loadedPkgs[PkgName.SPL_TOKEN_CLI];
+            if (initial) {
+              this._loadedPkgs[PkgName.SPL_TOKEN_CLI] = true;
+            }
+            const { runSplToken } = await PgPkg.loadPkg(PgPkg.SPL_TOKEN_CLI, {
+              log: initial,
+            });
+
+            runSplToken!(cmd, ...PgCommand.getCmdArgs(PkgName.SPL_TOKEN_CLI)!);
+          })();
         }
 
-        isCmdValid = true;
-      }
-    }
-
-    // Special command
-    if (cmd === PgCommand.RUN_LAST_CMD) {
-      // Run the last command
-      const entries = this._history.getEntries();
-      if (!entries.length) {
-        this._pgTty.println("No previous command.");
-        this.enable();
-      } else {
-        const lastCmd = entries[entries.length - 1];
-        this._parseCommand(lastCmd);
+        return;
       }
 
-      isCmdValid = true;
+      case PgCommand.SUGAR: {
+        PgTerminal.runCmd(async () => {
+          if (PgWallet.checkIsPgConnected()) {
+            const initial = !this._loadedPkgs[PkgName.SUGAR_CLI];
+            if (initial) {
+              this._loadedPkgs[PkgName.SUGAR_CLI] = true;
+            }
+            const { runSugar } = await PgPkg.loadPkg(PgPkg.SUGAR_CLI, {
+              log: initial,
+            });
+
+            await runSugar!(cmd);
+          }
+        });
+
+        return;
+      }
     }
 
     // Only new prompt after invalid command, other commands will automatically
     // generate new prompt
-    if (!isCmdValid) {
-      if (cmd) {
-        this._pgTty.println(`Command '${PgTerminal.italic(cmd)}' not found.\n`);
-      }
-
-      this.enable();
+    if (cmdName) {
+      this._pgTty.println(`Command '${PgTerminal.italic(cmd)}' not found.\n`);
     }
+
+    this.enable();
   }
 }

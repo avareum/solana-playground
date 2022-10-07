@@ -8,7 +8,7 @@ import {
   terminalOutputAtom,
   terminalStateAtom,
 } from "../../../../../state";
-import { PgBuild, PgPkg, PgTerminal, PkgName } from "../../../../../utils/pg";
+import { PgBuild, PgPkg, PgTerminal } from "../../../../../utils/pg";
 
 export const useBuild = () => {
   const [explorer] = useAtom(explorerAtom);
@@ -17,7 +17,7 @@ export const useBuild = () => {
   const [, setBuildCount] = useAtom(buildCountAtom);
 
   const runBuild = useCallback(() => {
-    PgTerminal.run(async () => {
+    PgTerminal.runCmd(async () => {
       setTerminalState(TerminalAction.buildStop);
 
       if (!explorer) return;
@@ -36,7 +36,7 @@ export const useBuild = () => {
 
         if (pythonFiles.length > 0) {
           const seahorsePkgToBuild = await PgPkg.loadPkg(
-            PkgName.SEAHORSE_COMPILE
+            PgPkg.SEAHORSE_COMPILE
           );
           result = await PgBuild.buildPython(pythonFiles, seahorsePkgToBuild);
         } else {

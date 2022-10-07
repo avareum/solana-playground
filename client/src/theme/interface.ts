@@ -1,5 +1,3 @@
-import { HighlightStyle } from "@codemirror/language";
-
 type BgAndColor = {
   bg?: string;
   color?: string;
@@ -45,7 +43,106 @@ export type Skeleton = {
   highlightColor: string;
 };
 
-export default interface Theme {
+type HighlightToken = {
+  color?: string;
+  fontStyle?: "bold" | "italic";
+};
+
+export interface PgHighlight {
+  // const x: _bool_ = true;
+  typeName: HighlightToken;
+
+  // let _x_: bool = true;
+  variableName: HighlightToken;
+
+  // _String_::new();
+  namespace: HighlightToken;
+
+  // _println!_()
+  macroName: HighlightToken;
+
+  // _myFn_()
+  functionCall: HighlightToken;
+
+  // a._to_lowercase_()
+  functionDef: HighlightToken;
+
+  // myFn(_arg_: bool)
+  functionArg: HighlightToken;
+
+  // const macro_rules struct union enum type fn impl trait let static
+  definitionKeyword: HighlightToken;
+
+  // mod use crate
+  moduleKeyword: HighlightToken;
+
+  // pub unsafe async mut extern default move
+  modifier: HighlightToken;
+
+  // for if else loop while match continue break return await
+  controlKeyword: HighlightToken;
+
+  // as in ref
+  operatorKeyword: HighlightToken;
+
+  // where crate super dyn
+  keyword: HighlightToken;
+
+  // self
+  self: HighlightToken;
+
+  // true
+  bool: HighlightToken;
+
+  // 5
+  integer: HighlightToken;
+
+  // 5.5
+  literal: HighlightToken;
+
+  // "" + b"" + r#""#
+  string: HighlightToken;
+
+  // '
+  character: HighlightToken;
+
+  // &
+  operator: HighlightToken;
+
+  // *
+  derefOperator: HighlightToken;
+
+  // Lifetime &_'a_
+  specialVariable: HighlightToken;
+
+  // Comment with //
+  lineComment: HighlightToken;
+
+  // Comment with /* */
+  blockComment: HighlightToken;
+
+  // #
+  meta: HighlightToken;
+
+  invalid: HighlightToken;
+
+  /// Unused in Rust
+
+  // const _x_: bool = true;
+  constant: HighlightToken;
+
+  regexp: HighlightToken;
+
+  tagName: HighlightToken;
+
+  attributeName: HighlightToken;
+
+  attributeValue: HighlightToken;
+
+  annotion: HighlightToken;
+}
+
+export interface PgTheme {
   name: string;
   isDark: boolean;
   colors: {
@@ -59,6 +156,7 @@ export default interface Theme {
       textSecondary: string;
       borderColor: string;
     };
+
     state: {
       hover: BgAndColor;
       disabled: BgAndColor;
@@ -67,79 +165,78 @@ export default interface Theme {
       warning: BgAndColor;
       info: BgAndColor;
     };
+
+    // Bottom bar
+    bottom?: BgAndColor; // primary, textPrimary
+
+    // Contrast
     contrast?: {
       color: string;
       primary?: boolean;
       secondary?: boolean;
     };
-    // Icon panel
-    left?: BgAndColor; // bgPrimary, textPrimary
-    // Side right panel
-    right?: {
-      bg?: string; // bgSecondary
-      color?: string; // textPrimary
-      otherBg?: string; // bgPrimary
-    };
-    // Terminal
-    terminal?: BgAndColor; // bgPrimary, textPrimary
+
     // Editor
-    editor?: {
-      bg?: string; // bgPrimary
-      color?: string; // textPrimary
-      cursor?: {
-        color: string; // textSecondary
-      };
+    editor?: BgAndColor & {
+      cursorColor?: string; // textSecondary
       selection?: BgAndColor;
       comment?: BgAndColor;
-      searchMatch?: {
-        bg?: string;
-        color?: string;
+      searchMatch?: BgAndColor & {
         selectedBg?: string;
         selectedColor?: string;
       };
-      activeLine?: {
-        bg?: string;
-        color?: string;
+      activeLine?: BgAndColor & {
         borderColor?: string;
       };
-      gutter?: {
-        bg?: string;
-        color?: string;
+      gutter?: BgAndColor & {
         activeBg?: string;
         activeColor?: string;
       };
-      tooltip?: {
-        bg?: string;
-        color?: string;
+      tooltip?: BgAndColor & {
         selectedBg?: string;
         selectedColor?: string;
       };
     };
-    // Bottom bar
-    bottom?: BgAndColor; // primary, textPrimary
+
+    // Home screen
+    home?: BgAndColor & {
+      card?: BgAndColor;
+    };
+
     // Left sidebar IconButton
-    iconButton?: {
-      bg?: string;
-      color?: string;
+    iconButton?: BgAndColor & {
       selectedBg?: string;
       selectedBorderColor?: string;
     };
-    tooltip?: BgAndColor;
-    toast?: BgAndColor;
-    home?: {
-      bg?: string; // bgPrimary
-      color?: string; // textPrimary
-      card?: {
-        bg?: string; // bgSecondary
-        color?: string; // textSecondary
-      };
+
+    // Input
+    input?: BgAndColor & {
+      borderColor?: string;
+      outlineColor?: string;
     };
+
+    // Icon panel
+    left?: BgAndColor; // bgPrimary, textPrimary
+
+    // Side right panel
+    right?: BgAndColor & { otherBg?: string };
+
+    // Terminal
+    terminal?: BgAndColor & { cursorColor?: string; selectionBg?: string };
+
+    // Notification toast
+    toast?: BgAndColor;
+
+    // General tooltip
+    tooltip?: BgAndColor;
   };
+
   borderRadius?: string;
+  boxShadow?: string;
   font?: Font;
-  transparency?: Transparency;
-  transition?: Transition;
   scrollbar?: Scrollbar;
   skeleton?: Skeleton;
-  highlight: HighlightStyle;
+  transparency?: Transparency;
+  transition?: Transition;
+  highlight: PgHighlight;
 }

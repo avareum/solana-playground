@@ -2,11 +2,13 @@ import styled, { css } from "styled-components";
 
 import Modal from "../../components/Modal";
 import Panels from "../../components/Panels";
+import Statics from "../../components/Statics";
 
 const IDE = () => (
   <Wrapper>
     <Panels />
     <Modal />
+    <Statics />
   </Wrapper>
 );
 
@@ -17,6 +19,12 @@ const Wrapper = styled.div`
     color: ${theme.colors.default.textPrimary};
     font-family: ${theme.font?.family};
     font-size: ${theme.font?.size.medium};
+
+    & svg {
+      color: ${theme.colors.default.textSecondary};
+      transition: color ${theme.transition?.duration.short}
+        ${theme.transition?.type};
+    }
 
     & ::selection {
       background-color: ${theme.colors.default.primary +

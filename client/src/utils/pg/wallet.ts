@@ -1,6 +1,9 @@
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import { AnchorWallet } from "@solana/wallet-adapter-react";
 
 import { PgTerminal } from "./terminal/";
+import { PgCommon } from "./common";
+import { EventName } from "../../constants";
 
 interface LsWallet {
   setupCompleted: boolean;
@@ -9,23 +12,24 @@ interface LsWallet {
   sk: Array<number>;
 }
 
-interface UpdateLsParams {
-  setupCompleted?: boolean;
-  connected?: boolean;
-  sk?: Array<number>;
-}
-
 const DEFAULT_LS_WALLET: LsWallet = {
   setupCompleted: false,
   connected: false,
   sk: Array.from(Keypair.generate().secretKey),
 };
 
-export class PgWallet {
+/**
+ * A class that can be used as a replacement of any AnchorWallet.
+ *
+ * This implementation allows playground to not have to wait for user confirmation
+ * for transactions.
+ */
+export class PgWallet implements AnchorWallet {
   private _kp: Keypair;
-  // Public key will always be set
+
+  /** Public key will always be set */
   publicKey: PublicKey;
-  // Connected can change
+  /** Connected can change */
   connected: boolean;
 
   constructor() {
@@ -40,16 +44,20 @@ export class PgWallet {
     this.connected = lsWallet.connected;
   }
 
+  get keypair() {
+    return this._kp;
+  }
+
   // For compatibility with AnchorWallet
   async signTransaction(tx: Transaction) {
-    tx.partialSign(this._kp);
+    tx.partialSign(this.keypair);
     return tx;
   }
 
   // For compatibility with AnchorWallet
   async signAllTransactions(txs: Transaction[]) {
     for (const tx of txs) {
-      tx.partialSign(this._kp);
+      tx.partialSign(this.keypair);
     }
 
     return txs;
@@ -76,7 +84,7 @@ export class PgWallet {
   /**
    * Update localStorage wallet
    */
-  static update(updateParams: UpdateLsParams) {
+  static update(updateParams: Partial<LsWallet>) {
     const lsWallet = this.getLs() ?? DEFAULT_LS_WALLET;
 
     if (updateParams.setupCompleted !== undefined)
@@ -113,5 +121,16 @@ export class PgWallet {
     PgTerminal.enable();
 
     return false;
+  }
+
+  /**
+   * Statically get the wallet object from state
+   *
+   * @returns the wallet object
+   */
+  static async get<T, R extends PgWallet>() {
+    return await PgCommon.sendAndReceiveCustomEvent<T, R>(
+      PgCommon.getStaticEventNames(EventName.WALLET_STATIC).get
+    );
   }
 }

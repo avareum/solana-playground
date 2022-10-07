@@ -6,6 +6,7 @@ import { format } from "util";
 import { PgTty } from "./tty";
 import { PgShell } from "./shell";
 import {
+  Emoji,
   EventName,
   GITHUB_URL,
   Id,
@@ -17,8 +18,9 @@ import {
 } from "../../../constants";
 import { TerminalAction } from "../../../state";
 import { PgCommon } from "../common";
-import { PkgName, Pkgs } from "./pkg";
 import { PgProgramInfo } from "../program-info";
+import { PgMethod, PgReturnType } from "../types";
+import { PgValidator } from "../validator";
 
 export class PgTerminal {
   /**
@@ -66,19 +68,17 @@ See the list of available crates and request new crates from: ${PgTerminal.under
 
 Type ${PgTerminal.bold("help")} to see all commands.`;
 
-  /**
-   * Default prompt string before entering commands
-   */
-  static readonly PROMPT = "$ ";
+  /** Default prompt string before entering commands */
+  static readonly PROMPT_PREFIX = "$ ";
 
-  /**
-   * Prompt after '
-   */
+  /** Prompt after `\` or `'` */
   static readonly CONTINUATION_PROMPT_PREFIX = "> ";
 
-  // Emojis
-  static readonly CROSS = "❌";
-  static readonly CHECKMARK = "✅";
+  /** Prefix for the waiting user input prompt message */
+  static readonly WAITING_INPUT_MSG_PREFIX = "? ";
+
+  /** Prompt prefix for waiting user input */
+  static readonly WAITING_INPUT_PROMPT_PREFIX = ">> ";
 
   static success(text: string) {
     return `\x1b[1;32m${text}\x1b[0m`;
@@ -127,11 +127,12 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
     text = text
       // Match for error
       .replace(
-        /\w*\serror(\[|:)/gim,
+        /\w*\s(\w*)error(\[|:)/gim,
         (match) =>
           this.error(match.substring(0, match.length - 1)) +
           match[match.length - 1]
       )
+
       // Match for warning
       .replace(/(\d\s)?warning(s|:)?/gim, (match) => {
         // warning:
@@ -145,13 +146,13 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
         // 1 warning, 2 warnings
         return this.warning(match);
       })
+
       // Match until ':' from the start of the line: e.g SUBCOMMANDS:
       // TODO: Highlight the text from WASM so we don't have to do this.
       .replace(/^(.*?:)/gm, (match) => {
-        if (
-          (!match.includes("   ") && match.startsWith(" ")) ||
-          match.startsWith("{")
-        ) {
+        if (new RegExp(/[http|{|}]/).test(match)) return match;
+        if (match.startsWith(" ") && !match.includes("   ")) {
+          console.log(match);
           return this.bold(match); // Indented
         }
         if (!match.toLowerCase().includes("error") && !match.includes("  ")) {
@@ -160,12 +161,15 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
 
         return match;
       })
+
       // Secondary text color for (...)
-      .replace(/\(\d+\w+\)/gm, (match) => this.secondaryText(match))
+      .replace(/\(.*\)/gm, (match) => this.secondaryText(match))
+
       // Numbers
-      .replace(/^\s*\d+$/, (match) => {
-        return this.secondary(match);
-      });
+      .replace(/^\s*\d+$/, (match) => this.secondary(match))
+
+      // Progression [1/5]
+      .replace(/\[\d+\/\d+\]/, (match) => this.bold(match));
 
     return text;
   }
@@ -218,7 +222,7 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
         const parts = msg.split(":");
 
         let ixIndex = parts[2][parts[2].length - 1];
-        if (!PgCommon.isInt(ixIndex)) ixIndex = "0";
+        if (!PgValidator.isInt(ixIndex)) ixIndex = "0";
         const programError = PROGRAM_ERROR[programErrorCode];
 
         msg = `\n${this.bold("Instruction index:")} ${ixIndex}\n${this.bold(
@@ -315,17 +319,8 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
    *
    * Mainly used from WASM
    */
-  static logWasm(msg: string) {
+  static logWasm(msg: any) {
     PgCommon.createAndDispatchCustomEvent(EventName.TERMINAL_LOG, { msg });
-  }
-
-  /**
-   * Dispatch load pkg terminal custom event
-   */
-  static loadPkg(pkg: PkgName) {
-    PgCommon.createAndDispatchCustomEvent(EventName.TERMINAL_LOAD_PKG, {
-      pkg,
-    });
   }
 
   /**
@@ -341,13 +336,13 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
    * This function should be used as a wrapper function when calling any
    * terminal command.
    */
-  static async run<T>(cb: () => Promise<T>) {
+  static async runCmd<T>(cb: () => Promise<T>) {
     this.disable();
     this.scrollToBottom();
     try {
       return await cb();
     } catch (e: any) {
-      this.logWasm(`${this.error("Process error")}: ${e.message}`);
+      this.logWasm(`Process error: ${e.message}`);
     } finally {
       this.enable();
     }
@@ -371,6 +366,33 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
   }
 
   /**
+   * Statically get the terminal object from state
+   *
+   * @returns the terminal object
+   */
+  static async get<T, R extends PgTerm>() {
+    return await PgCommon.sendAndReceiveCustomEvent<T, R>(
+      PgCommon.getStaticEventNames(EventName.TERMINAL_STATIC).get
+    );
+  }
+
+  /**
+   * Run any method of terminal in state from anywhere
+   *
+   * @param data method and its data to run
+   * @returns the result from the method call
+   */
+  static async run<
+    M extends PgMethod<PgTerm>,
+    R extends PgReturnType<PgTerm, keyof M>
+  >(data: M) {
+    return await PgCommon.sendAndReceiveCustomEvent<M, R>(
+      PgCommon.getStaticEventNames(EventName.TERMINAL_STATIC).run,
+      data
+    );
+  }
+
+  /**
    * Redifined console.log for showing mocha logs in the playground terminal
    */
   static consoleLog(msg: string, ...rest: any[]) {
@@ -382,13 +404,16 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
       if (fullMessage.startsWith("  ")) {
         const editedMessage = fullMessage
           // Replace checkmark icon
-          .replace(PgTerminal.CHECKMARK, PgTerminal.success("✔"))
+          .replace(Emoji.CHECKMARK, PgTerminal.success("✔ "))
           // Make '1) testname' red
           .replace(/\s+\d\)\s\w*$/, (match) => PgTerminal.error(match))
           // Passing text
           .replace(/\d+\spassing/, (match) => PgTerminal.success(match))
           // Failing text
-          .replace(/\d+\sfailing/, (match) => PgTerminal.error(match));
+          .replace(/\d+\sfailing/, (match) => PgTerminal.error(match))
+          // Don't show the stack trace because it shows the transpiled code
+          // TODO: show where the error actually happened in user code
+          .replace(/\s+at.*$/gm, "");
 
         PgTerminal.logWasm(editedMessage);
       }
@@ -416,14 +441,6 @@ export class PgTerm {
     // Container is empty at start
     this._container = null;
 
-    this._xterm.onResize(this._handleTermResize);
-    this._xterm.onKey((keyEvent: { key: string; domEvent: KeyboardEvent }) => {
-      if (keyEvent.key === " ") {
-        keyEvent.domEvent.preventDefault();
-        return false;
-      }
-    });
-
     // Load xterm addons
     this._webLinksAddon = new WebLinksAddon();
     this._fitAddon = new FitAddon();
@@ -434,20 +451,25 @@ export class PgTerm {
     this._pgTty = new PgTty(this._xterm);
     this._pgShell = new PgShell(this._pgTty);
 
+    // XTerm events
+    this._xterm.onResize(this._handleTermResize);
+    this._xterm.onKey((keyEvent: { key: string; domEvent: KeyboardEvent }) => {
+      if (keyEvent.key === " ") {
+        keyEvent.domEvent.preventDefault();
+        return false;
+      }
+    });
     // Any data event (key, paste...)
     this._xterm.onData(this._pgShell.handleTermData);
 
     this._isOpen = false;
   }
 
-  setPkgs(pkgs: Pkgs) {
-    this._pgShell.setPkgs(pkgs);
-  }
-
   open(container: HTMLElement) {
     this._container = container;
 
     this._xterm.open(container);
+    this._xterm.attachCustomKeyEventHandler(this._handleCustomEvent);
     this._isOpen = true;
 
     // Print welcome text
@@ -475,20 +497,11 @@ export class PgTerm {
           this._pgTty.setInput(input);
         } else {
           // Clear the input in case of a prompt bug where there is a text before the prompt
-          this._pgTty.clearCurrentLine();
+          this._pgTty.clearLine();
           this._pgShell.prompt();
         }
       }
     }, 100); // time needs to be lower than specified fit interval in Terminal component
-  }
-
-  /**
-   * Used for overriding default xterm key event handler
-   */
-  attachCustomKeyEventHandler(
-    customKeyEventHandler: (e: KeyboardEvent) => boolean
-  ) {
-    this._xterm.attachCustomKeyEventHandler(customKeyEventHandler);
   }
   /**
    * Focus terminal and scroll to cursor
@@ -570,20 +583,13 @@ export class PgTerm {
   }
 
   /**
-   * Get terminal selection as string
-   */
-  getSelection() {
-    return this._xterm.getSelection();
-  }
-
-  /**
    * Moves the command line to the top of the terminal screen
    *
    * This function does not clear previous history.
    */
   clear() {
     this._pgTty.clearTty();
-    this._pgTty.print(`${PgTerminal.PROMPT}${this._pgTty.getInput()}`);
+    this._pgTty.print(`${PgTerminal.PROMPT_PREFIX}${this._pgTty.getInput()}`);
   }
 
   /**
@@ -594,7 +600,7 @@ export class PgTerm {
    */
   disable() {
     this._pgShell.disable();
-    this._pgTty.clearCurrentLine();
+    this._pgTty.clearLine();
   }
 
   /**
@@ -644,6 +650,180 @@ export class PgTerm {
     this._pgTty.setInput(cmd);
     this._pgShell.handleReadComplete(true);
   }
+
+  /**
+   * Wait for user input
+   *
+   * @param msg message to print to the terminal before prompting user
+   * @param opts -
+   * - allowEmpty: whether to allow the input to be empty
+   * - confirm: yes/no question. Returns the result as boolean.
+   * - default: default value to set
+   * - multiChoice.items: set of values to choose from. Returns the selected indices.
+   * - multiChoice.chooseOne: whether to choose only one. Returns the selected index.
+   * - validator: callback function to validate the user input
+   * @returns user input
+   */
+  async waitForUserInput<
+    O extends {
+      allowEmpty?: boolean;
+      confirm?: boolean;
+      default?: string;
+      multiChoice?: {
+        items: string[];
+        chooseOne?: boolean;
+      };
+      validator?: (userInput: string) => boolean | void;
+    }
+  >(
+    msg: string,
+    opts?: O
+  ): Promise<
+    O["confirm"] extends boolean
+      ? boolean
+      : O["multiChoice"] extends object
+      ? O["multiChoice"]["chooseOne"] extends boolean
+        ? number
+        : number[]
+      : string
+  > {
+    let convertedMsg = msg;
+    if (opts?.default) {
+      convertedMsg += ` (default: ${opts.default})`;
+    }
+    if (opts?.multiChoice) {
+      // Show multi choice items
+      convertedMsg += opts.multiChoice.items.reduce(
+        (acc, cur, i) => acc + `[${i}] - ${cur}\n`,
+        "\n"
+      );
+    } else if (opts?.confirm) {
+      convertedMsg = PgTerminal.secondaryText(` [yes/no]`);
+    }
+
+    let userInput = await this._pgShell.waitForUserInput(convertedMsg);
+    if (!userInput && opts?.default) {
+      userInput = opts.default;
+    }
+
+    // Default validators
+    if (opts && !opts.validator) {
+      // Validate confirm
+      if (opts.confirm) {
+        opts.validator = (input) => input === "yes" || input === "no";
+      }
+
+      // Validate multi choice
+      if (opts.multiChoice) {
+        const multiChoiceMaxLength = opts.multiChoice.items.length - 1;
+        opts.validator = (input) => {
+          const parsed: number[] = JSON.parse(`[${input}]`);
+          return (
+            (opts.multiChoice?.chooseOne ? parsed.length === 1 : true) &&
+            parsed.every(
+              (v) =>
+                PgValidator.isInt(v.toString()) &&
+                v >= 0 &&
+                v <= multiChoiceMaxLength
+            )
+          );
+        };
+      }
+    }
+
+    // Default
+    if (!userInput && !opts?.allowEmpty) {
+      PgTerminal.logWasm(PgTerminal.error("Can't be empty."));
+      return await this.waitForUserInput(msg, opts);
+    }
+
+    // Validator
+    if (opts?.validator) {
+      try {
+        if (opts.validator(userInput) === false) {
+          PgTerminal.logWasm(
+            PgTerminal.error(`'${userInput}' is not a valid value.\n`)
+          );
+          return await this.waitForUserInput(msg, opts);
+        }
+      } catch (e: any) {
+        PgTerminal.logWasm(PgTerminal.error(`${e.message}\n`));
+        return await this.waitForUserInput(msg, opts);
+      }
+    }
+
+    // Return value
+    let returnValue;
+
+    // Confirm
+    if (opts?.confirm) {
+      returnValue = userInput === "yes" ? true : false;
+    }
+    // Multichoice
+    else if (opts?.multiChoice) {
+      if (opts.multiChoice.chooseOne) {
+        returnValue = parseInt(userInput);
+      } else {
+        returnValue = JSON.parse(`[${userInput}]`);
+      }
+    }
+    // Default as string
+    else {
+      returnValue = userInput;
+    }
+
+    let visibleText = PgTerminal.success(returnValue);
+    if (returnValue === "" || returnValue?.length === 0) {
+      visibleText = PgTerminal.secondaryText("empty");
+    }
+
+    this._pgTty.changeLine(
+      PgTerminal.WAITING_INPUT_PROMPT_PREFIX + visibleText
+    );
+    return returnValue as any;
+  }
+
+  /**
+   * Custom keyboard events. Only runs when terminal is in focus.
+   *
+   * @param e keyboard event
+   * @returns whether to keep the defaults
+   *
+   * NOTE: This function is intentionally uses arrow functions for `this` to be
+   * defined from the outer class (PgTerm) otherwise `this` is being defined from
+   * XTerm's instance
+   */
+  private _handleCustomEvent = (e: KeyboardEvent) => {
+    if (PgCommon.isKeyCtrlOrCmd(e) && e.type === "keydown") {
+      const key = e.key.toUpperCase();
+
+      switch (key) {
+        case "C":
+          if (e.shiftKey) {
+            e.preventDefault();
+            const selection = this._xterm.getSelection();
+            navigator.clipboard.writeText(selection);
+            return false;
+          }
+
+          return true;
+
+        case "V":
+          // Ctrl+Shift+V does not work with Firefox but works with Chromium.
+          // We fallback to Ctrl+V for Firefox
+          if (e.shiftKey || PgCommon.isFirefox()) return false;
+
+          return true;
+
+        case "L":
+        case "M":
+        case "J":
+          return false;
+      }
+    }
+
+    return true;
+  };
 
   /**
    * Handle terminal resize
