@@ -959,4 +959,67 @@ impl WasmClient {
         self.get_token_supply_with_commitment(mint, self.commitment_config())
             .await
     }
+
+    // multiple_token_accounts
+
+    pub async fn get_multiple_token_accounts_with_config(
+        &self,
+        pubkeys: &[Pubkey],
+        config: RpcAccountInfoConfig,
+    ) -> ClientResult<Vec<Option<UiTokenAccount>>> {
+        let request = GetMultipleAccountsRequest::new_with_config(pubkeys.to_vec(), config).into();
+        let response = GetMultipleAccountsResponse::from(self.send(request).await?);
+        
+        Ok(response
+            .value
+            .into_iter()
+            .filter(|maybe_acc| maybe_acc.is_some())
+            .flatten()
+            .map(|acc| {
+                match acc.data {
+                    UiAccountData::Json(account_data) => {
+                        let token_account_type: Option<TokenAccountType> =
+                        match serde_json::from_value(account_data.parsed) {
+                            Ok(t) =>Some(t),
+                            Err(_) => None,
+                        };
+    
+                        match token_account_type.unwrap() {
+                            TokenAccountType::Account(token_account) => Some(token_account),
+                            TokenAccountType::Mint(_) => todo!(),
+                            TokenAccountType::Multisig(_) => todo!(),
+                        }
+                    }
+                    UiAccountData::LegacyBinary(_) => todo!(),
+                    UiAccountData::Binary(_, _) => todo!(),
+                }
+            })
+            .collect())
+    }
+
+    pub async fn get_multiple_token_accounts_with_commitment(
+        &self,
+        pubkeys: &[Pubkey],
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<Vec<Option<UiTokenAccount>>> {
+        self.get_multiple_token_accounts_with_config(
+            pubkeys,
+            RpcAccountInfoConfig {
+                encoding: Some(UiAccountEncoding::JsonParsed),
+            commitment: Some(commitment_config),
+            data_slice: None,
+            min_context_slot: None,
+                ..RpcAccountInfoConfig::default()
+            },
+        )
+        .await
+    }
+
+    pub async fn get_multiple_token_accounts(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> ClientResult<Vec<Option<UiTokenAccount>>> {
+        self.get_multiple_token_accounts_with_commitment(pubkeys, self.commitment_config())
+            .await
+    }
 }
