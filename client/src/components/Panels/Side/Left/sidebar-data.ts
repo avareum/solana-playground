@@ -1,6 +1,6 @@
-import { Sidebar } from "../sidebar-state";
+import { Sidebar } from "../../../../utils/pg";
 
-const ROOT_DIR = "icons/sidebar/";
+const ROOT_DIR = "/icons/sidebar/";
 
 export const sidebarData = {
   top: [
@@ -23,6 +23,11 @@ export const sidebarData = {
       title: `${Sidebar.TEST} (Ctrl+Shift+D)`,
       src: ROOT_DIR + "test.png",
       value: Sidebar.TEST,
+    },
+    {
+      title: `${Sidebar.TUTORIALS} (Ctrl+Shift+L)`,
+      src: ROOT_DIR + "tutorials.webp",
+      value: Sidebar.TUTORIALS,
     },
   ],
   bottom: [

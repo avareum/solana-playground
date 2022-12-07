@@ -1,5 +1,5 @@
-import { ChangeEvent } from "react";
-import { useAtom } from "jotai";
+import { useMemo } from "react";
+import { Atom, useAtom } from "jotai";
 import styled from "styled-components";
 
 import Button from "../../../../Button";
@@ -21,16 +21,13 @@ import {
   Rename,
   Trash,
 } from "../../../../Icons";
+import { PgExplorer, PgTutorial } from "../../../../../utils/pg";
 
 const Workspaces = () => {
   const [explorer] = useAtom(explorerAtom);
   const [, setModal] = useAtom(modalAtom);
 
-  if (!explorer?.hasWorkspaces()) return <ShareWarning />;
-
-  const handleSelect = (e: ChangeEvent<HTMLSelectElement>) => {
-    explorer.changeWorkspace(e.target.value);
-  };
+  if (explorer?.isShared) return <ShareWarning />;
 
   const handleNew = () => {
     setModal(<NewWorkspace />);
@@ -54,7 +51,7 @@ const Workspaces = () => {
 
   const handleFsExport = async () => {
     try {
-      await explorer.exportWorkspace();
+      await explorer?.exportWorkspace();
     } catch (e: any) {
       console.log(e.message);
     }
@@ -89,14 +86,65 @@ const Workspaces = () => {
           </Button>
         </ButtonsWrapper>
       </TopWrapper>
-      <SelectWrapper>
-        <Select value={explorer.currentWorkspaceName} onChange={handleSelect}>
-          {explorer.allWorkspaceNames!.map((name, i) => (
-            <option key={i}>{name}</option>
-          ))}
-        </Select>
-      </SelectWrapper>
+      <WorkspaceSelect />
     </Wrapper>
+  );
+};
+
+const WorkspaceSelect = () => {
+  const [explorer] = useAtom<PgExplorer>(explorerAtom as Atom<PgExplorer>);
+
+  const options = useMemo(
+    () => {
+      const projects = explorer.allWorkspaceNames!.filter(
+        (name) => !PgTutorial.isWorkspaceTutorial(name)
+      );
+      const tutorials = explorer.allWorkspaceNames!.filter(
+        PgTutorial.isWorkspaceTutorial
+      );
+
+      const projectOptions = [
+        {
+          label: "Projects",
+          options: projects.map((name) => ({ value: name, label: name })),
+        },
+      ];
+      if (tutorials.length) {
+        return projectOptions.concat([
+          {
+            label: "Tutorials",
+            options: tutorials.map((name) => ({ value: name, label: name })),
+          },
+        ]);
+      }
+
+      return projectOptions;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [explorer.currentWorkspaceName]
+  );
+  const value = useMemo(() => {
+    for (const option of options) {
+      const val = option.options.find(
+        (option) => option.value === explorer.currentWorkspaceName
+      );
+      if (val) return val;
+    }
+  }, [explorer.currentWorkspaceName, options]);
+
+  return (
+    <SelectWrapper>
+      <Select
+        options={options}
+        value={value}
+        onChange={(props) => {
+          const newWorkspace = props?.value!;
+          if (explorer.currentWorkspaceName !== newWorkspace) {
+            explorer.changeWorkspace(newWorkspace);
+          }
+        }}
+      />
+    </SelectWrapper>
   );
 };
 

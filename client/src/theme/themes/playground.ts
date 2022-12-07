@@ -50,6 +50,7 @@ export const PLAYGROUND: PgTheme = {
       },
       hover: {
         bg: BG_LIGHT,
+        color: "#838799",
       },
       info: {
         color: BLUE,
@@ -66,12 +67,6 @@ export const PLAYGROUND: PgTheme = {
     },
     iconButton: {
       selectedBg: BG_LIGHT,
-    },
-    home: {
-      bg: BG_DARK,
-      card: {
-        bg: BG_DEFAULT,
-      },
     },
     editor: {
       gutter: {

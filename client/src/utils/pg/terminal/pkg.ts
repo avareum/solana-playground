@@ -2,7 +2,7 @@ import { GITHUB_URL } from "../../../constants";
 import { PgTerminal } from "./terminal";
 
 export interface Pkgs {
-  compileSeahorse?: (pythonSource: string, programName: string) => string;
+  compileSeahorse?: (pythonSource: string, programName: string) => string[];
   runSolana?: (
     arg: string,
     endpoint: string,
@@ -77,7 +77,7 @@ export class PgPkg {
   ): Promise<Pkgs> {
     const log = opts?.log;
     if (log) {
-      PgTerminal.logWasm(PgTerminal.info(`Loading ${pkgInfo.uiName}...`));
+      PgTerminal.log(PgTerminal.info(`Loading ${pkgInfo.uiName}...`));
     }
 
     let resultMsg;
@@ -99,7 +99,7 @@ export class PgPkg {
 
       throw new Error(resultMsg);
     } finally {
-      if (log) PgTerminal.logWasm(resultMsg + "\n");
+      if (log) PgTerminal.log(resultMsg + "\n");
     }
   }
 

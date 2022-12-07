@@ -1,53 +1,32 @@
-import { toDateTime } from "@metaplex-foundation/js";
-import { PublicKey } from "@solana/web3.js";
-
-import { ConfigData } from "../../types";
+import { ConfigData, ToPrimitive, UploadMethod } from "../../types";
 import { Emoji } from "../../../../../../constants";
-import { PgConnection } from "../../../../connection";
 import { PgTerminal } from "../../../../terminal";
 import { PgValidator } from "../../../../validator";
-import {
-  EndSettingType,
-  WhitelistMintMode,
-} from "@metaplex-foundation/mpl-candy-machine";
 import { PgExplorer } from "../../../../explorer";
+import { PgCommon } from "../../../../common";
+import {
+  MAX_NAME_LENGTH,
+  MAX_URI_LENGTH,
+  REPLACEMENT_INDEX_INCREMENT,
+} from "../../constants";
 
-const CIVIC_NETWORK = new PublicKey(
-  "ignREusXmGrscGNUesoU9mxfds9AiYTezUKex2PsZV6"
-);
-const ENCORE_NETWORK = new PublicKey(
-  "tibePmPaoTgrs929rWpu755EXaxC7M3SthVCf6GzjZt"
-);
+export const processCreateConfig = async () => {
+  const term = await PgTerminal.get();
 
-const MAX_FREEZE_DAYS = 31;
-
-export const processCreateConfig = async (
-  rpcUrl: string = PgConnection.endpoint
-) => {
-  PgTerminal.logWasm(`[1/2] ${Emoji.CANDY} Sugar interactive config maker`);
-
-  PgTerminal.logWasm(
+  term.println(`[1/2] ${Emoji.CANDY} Sugar interactive config maker`);
+  term.println(
     "\nCheck out our Candy Machine config docs to learn about the options:"
   );
-  PgTerminal.logWasm(
+  term.println(
     `  -> ${PgTerminal.underline(
       "https://docs.metaplex.com/tools/sugar/configuration"
     )}\n`
   );
 
-  const term = await PgTerminal.get();
+  const configData: Partial<ToPrimitive<ConfigData>> = {};
 
-  const configData: Partial<ConfigData> = {};
-
-  // Price
-  configData.price = parseFloat(
-    await term.waitForUserInput("What is the price of each NFT?", {
-      validator: PgValidator.isFloat,
-    })
-  );
-
-  // Number
-  configData.number = parseInt(
+  // Size
+  configData.size = parseInt(
     await term.waitForUserInput(
       "How many NFTs will you have in your candy machine?",
       { validator: PgValidator.isInt }
@@ -67,8 +46,8 @@ export const processCreateConfig = async (
     }
   );
 
-  // Seller fee basis points
-  configData.sellerFeeBasisPoints = parseInt(
+  // Royalties(seller fee basis points)
+  configData.royalties = parseInt(
     await term.waitForUserInput("What is the seller fee basis points?", {
       validator: (input) => {
         if (!PgValidator.isInt(input)) {
@@ -81,16 +60,11 @@ export const processCreateConfig = async (
     })
   );
 
-  // TODO: validate
-  // Date
-  const date = await term.waitForUserInput(
-    [
-      "What is your go live date? Many common formats are supported.",
-      "If unsure, try YYYY-MM-DD HH:MM:SS [+/-]UTC-OFFSET or type 'now' for current time.",
-      "For example 2022-05-02 18:00:00 +0000 for May 2, 2022 18:00:00 UTC.",
-    ].join(" ")
+  // Sequential
+  configData.isSequential = await term.waitForUserInput(
+    "Do you want to use a sequential mint index generation? We recommend you choose no.",
+    { confirm: true }
   );
-  configData.goLiveDate = date === "" ? null : date;
 
   // Creators
   const numberOfCreators = parseInt(
@@ -117,10 +91,11 @@ export const processCreateConfig = async (
 
   configData.creators = [];
   for (let i = 0; i < numberOfCreators; i++) {
-    const address = new PublicKey(
-      await term.waitForUserInput(`Enter creator wallet address #${i + 1}`, {
+    const address = await term.waitForUserInput(
+      `Enter creator wallet address #${i + 1}`,
+      {
         validator: PgValidator.isPubkey,
-      })
+      }
     );
     const share = parseInt(
       await term.waitForUserInput(
@@ -135,206 +110,59 @@ export const processCreateConfig = async (
     );
 
     totalShare += share;
-    configData.creators.push({ address, share, verified: false });
+    configData.creators.push({ address, share });
   }
 
   // Optional extra features
   const choices = await term.waitForUserInput(
-    "Which extra features do you want to use? Leave empty for no extra features. (e.g. 0,2)",
+    "Which extra features do you want to use? Leave empty for no extra features.",
     {
       allowEmpty: true,
-      multiChoice: {
+      choice: {
         items: [
-          "SPL Token Mint", // 0
-          "Gatekeeper", // 1
-          "Whitelist Mint", // 2
-          "End Settings", // 3
-          "Hidden Settings", // 4
-          "Freeze Settings", // 5
+          "Hidden Settings", // 0
         ],
+        allowMultiple: true,
       },
     }
   );
 
-  // SPL Token Mint
+  // Hidden Settings
   if (choices.includes(0)) {
-    configData.solTreasuryAccount = null;
-    configData.splToken = await term.waitForUserInput(
-      "What is your SPL token mint address?",
-      {
-        validator: PgValidator.isPubkey,
-      }
-    );
-    configData.splTokenAccount = await term.waitForUserInput(
-      "What is your SPL token account address (the account that will hold the SPL token mints)?",
-      {
-        validator: PgValidator.isPubkey,
-      }
-    );
-  } else {
-    configData.splToken = null;
-    configData.splTokenAccount = null;
-    configData.solTreasuryAccount = await term.waitForUserInput(
-      "What is your SOL treasury address?",
-      {
-        validator: PgValidator.isPubkey,
-      }
-    );
-  }
-
-  // Gatekeeper
-  if (choices.includes(1)) {
-    const gatekeeperOption = await term.waitForUserInput(
+    let name = await term.waitForUserInput(
       [
-        "Which gatekeeper network do you want to use?",
-        "Check https://docs.metaplex.com/guides/archived/candy-machine-v2/configuration#provider-networks for more info.",
+        "What is the prefix name for your hidden settings mints? The mint index will be appended at the end of the name.",
+        PgTerminal.secondaryText(
+          "(If you put 'My NFT', NFTs will be named 'My NFT #1' 'My NFT #2'...)"
+        ),
       ].join(" "),
       {
-        multiChoice: {
-          items: [
-            "Civic Pass", // 0
-            "Verify by Encore", // 1
-          ],
-          chooseOne: true,
-        },
-        default: "0",
-      }
-    );
-
-    const expireOnUse = await term.waitForUserInput(
-      "To help prevent bots even more, do you want to expire the gatekeeper token on each mint?",
-      { confirm: true }
-    );
-
-    const network = gatekeeperOption === 0 ? CIVIC_NETWORK : ENCORE_NETWORK;
-
-    configData.gatekeeper = {
-      network,
-      expireOnUse,
-    };
-  } else {
-    configData.gatekeeper = null;
-  }
-
-  // Whitelist Mint
-  if (choices.includes(2)) {
-    const mint = new PublicKey(
-      await term.waitForUserInput("What is your WL token mint address?", {
-        validator: PgValidator.isPubkey,
-      })
-    );
-
-    const mode =
-      (await term.waitForUserInput(
-        "Do you want the whitelist token to be burned on each mint?",
-        { confirm: true }
-      )) === true
-        ? WhitelistMintMode.BurnEveryTime
-        : WhitelistMintMode.NeverBurn;
-
-    const presale = await term.waitForUserInput(
-      "Do you want to enable presale mint with your whitelist token?",
-      { confirm: true }
-    );
-
-    let discountPrice = null;
-    if (presale) {
-      const price = await term.waitForUserInput(
-        "What is the discount price for the presale? Hit [ENTER] to not set a discount price.",
-        { allowEmpty: true, validator: PgValidator.isFloat }
-      );
-      if (price) discountPrice = parseFloat(price);
-    }
-
-    configData.whitelistMintSettings = {
-      mint,
-      mode,
-      discountPrice,
-      presale,
-    };
-  } else {
-    configData.whitelistMintSettings = null;
-  }
-
-  // End Settings
-  if (choices.includes(3)) {
-    const endSettingType = await term.waitForUserInput(
-      "What end settings type do you want to use?",
-      {
-        multiChoice: {
-          items: ["Amount", "Date"],
-          chooseOne: true,
-        },
-        default: "0",
-      }
-    );
-
-    // Amount
-    if (endSettingType === 0) {
-      const number = parseInt(
-        await term.waitForUserInput("What is the amount to stop the mint?", {
-          validator: (input) => {
-            if (!PgValidator.isInt(input)) return false;
-            if (parseInt(input) > configData.number!) {
-              throw new Error(
-                "Your end settings amount cannot be more than the number of items in your candy machine."
-              );
-            }
-          },
-        })
-      );
-
-      configData.endSettings = {
-        endSettingType: EndSettingType.Amount,
-        number,
-      };
-    }
-    // Date
-    else {
-      const date = await term.waitForUserInput(
-        [
-          "What is the date to stop the mint?",
-          "Many common formats are supported.",
-          "If unsure, try YYYY-MM-DD HH:MM:SS [+/-]UTC-OFFSET.",
-          "For example 2022-05-02 18:00:00 +0000 for May 2, 2022 18:00:00 UTC.",
-        ].join(" "),
-        {
-          // TODO: Validation
-        }
-      );
-
-      // Convert to ISO 8601 for consistency, before storing in config
-      const formattedDate = toDateTime(date);
-      configData.endSettings = {
-        endSettingType: EndSettingType.Date,
-        date: formattedDate,
-      };
-    }
-  } else {
-    configData.endSettings = null;
-  }
-
-  // Hidden Settings
-  if (choices.includes(4)) {
-    const name = await term.waitForUserInput(
-      "What is the prefix name for your hidden settings mints? The mint index will be appended at the end of the name.",
-      {
         validator: (input) => {
-          if (input.length > 25) {
+          if (!input.includes(REPLACEMENT_INDEX_INCREMENT)) {
+            input += ` #${REPLACEMENT_INDEX_INCREMENT}`;
+          }
+          const maxNameLengthWithoutFiller =
+            MAX_NAME_LENGTH - (REPLACEMENT_INDEX_INCREMENT.length + 2);
+          if (input.length > maxNameLengthWithoutFiller) {
             throw new Error(
-              "Your hidden settings name probably cannot be longer than 25 characters."
+              `Your hidden settings name probably cannot be longer than ${maxNameLengthWithoutFiller} characters.`
             );
           }
         },
       }
     );
+    if (!name.includes(REPLACEMENT_INDEX_INCREMENT)) {
+      name += ` #${REPLACEMENT_INDEX_INCREMENT}`;
+    }
 
     const uri = await term.waitForUserInput(
       "What is URI to be used for each mint?",
       {
         validator: (input) => {
-          if (input.length > 200) {
-            throw new Error("The URI cannot be longer than 200 characters.");
+          if (input.length > MAX_URI_LENGTH) {
+            throw new Error(
+              `The URI cannot be longer than ${MAX_URI_LENGTH} characters.`
+            );
           }
 
           // This throws an error if url is invalid
@@ -348,57 +176,40 @@ export const processCreateConfig = async (
     configData.hiddenSettings = null;
   }
 
-  // Freeze Settings
-  if (choices.includes(5)) {
-    const days = await term.waitForUserInput(
-      "How many days do you want to freeze the treasury funds and minted NFTs for? (max: 31)",
-      {
-        default: MAX_FREEZE_DAYS.toString(),
-        validator: (input) => {
-          if (!PgValidator.isInt(input)) {
-            throw new Error(`Couldn't parse input of '${input}' to a number.`);
-          }
-          if (parseInt(input) > MAX_FREEZE_DAYS) {
-            throw new Error(
-              `Freeze time cannot be greater than ${MAX_FREEZE_DAYS} days.`
-            );
-          }
-        },
-      }
-    );
-
-    // Convert to seconds for storing in config and to match candy machine value
-    configData.freezeTime = parseInt(days) * 86400;
-  } else {
-    configData.freezeTime = null;
-  }
-
   // Upload method
-  const uploadMethod = await term.waitForUserInput(
-    "What upload method do you want to use?",
-    {
-      multiChoice: {
-        items: [
-          "Bundlr", // 0
-          "AWS", // 1
-          "NFT Storage", // 2
-          "SHDW", // 3
-        ],
-        chooseOne: true,
-      },
-      default: "0",
-    }
-  );
+  configData.uploadConfig = {
+    // TODO:
+    // method: await term.waitForUserInput(
+    //   `"What upload method do you want to use?"`,
+    //   {
+    //     choice: {
+    //       items: [
+    //         "Bundlr", // 0
+    //         "AWS", // 1
+    //         "NFT Storage", // 2
+    //         "SHDW", // 3
+    //         "Pinata", // 4
+    //       ],
+    //     },
+    //     default: "0",
+    //   }
+    // ),
+    method: UploadMethod.BUNDLR,
+    awsConfig: null,
+    nftStorageAuthToken: null,
+    pinataConfig: null,
+    shdwStorageAccount: null,
+  };
 
-  switch (uploadMethod) {
+  switch (configData.uploadConfig.method) {
     // Bundlr
-    case 0: {
+    case UploadMethod.BUNDLR: {
       // This is the default, do nothing.
       break;
     }
 
     // AWS
-    case 1: {
+    case UploadMethod.AWS: {
       const bucket = await term.waitForUserInput(
         "What is the AWS S3 bucket name?"
       );
@@ -408,41 +219,87 @@ export const processCreateConfig = async (
       );
       const directory = await term.waitForUserInput(
         "What is the directory to upload to? Leave blank to store files at the bucket root dir.",
-        { default: "" }
+        { allowEmpty: true }
+      );
+      const domain = await term.waitForUserInput(
+        "Do you have a custom domain? Leave blank to use AWS default domain.",
+        { allowEmpty: true }
       );
 
-      configData.awsConfig = { bucket, profile, directory };
+      configData.uploadConfig.awsConfig = {
+        bucket,
+        profile,
+        directory,
+        domain: domain ? domain : null,
+      };
       break;
     }
 
     // NFT Storage
-    case 2: {
-      configData.nftStorageAuthToken = await term.waitForUserInput(
+    case UploadMethod.NFT_STORAGE: {
+      configData.uploadConfig.nftStorageAuthToken = await term.waitForUserInput(
         "What is the NFT Storage authentication token?"
       );
       break;
     }
 
     // SHDW
-    case 3: {
-      configData.shdwStorageAccount = await term.waitForUserInput(
+    case UploadMethod.SHDW: {
+      configData.uploadConfig.shdwStorageAccount = await term.waitForUserInput(
         "What is the SHDW storage address?",
         { validator: PgValidator.isPubkey }
       );
+      break;
+    }
+
+    // Pinata
+    case UploadMethod.PINATA: {
+      const jwt = await term.waitForUserInput(
+        "What is your Pinata JWT authentication?"
+      );
+
+      const apiGateway = await term.waitForUserInput(
+        "What is the Pinata API gateway for upload?",
+        { default: "https://api.pinata.cloud" }
+      );
+
+      const contentGateway = await term.waitForUserInput(
+        "What is the Pinata gateway for content retrieval?",
+        { default: "https://gateway.pinata.cloud" }
+      );
+
+      const parallelLimit = parseInt(
+        await term.waitForUserInput(
+          "How many concurrent uploads are allowed?",
+          { validator: PgValidator.isInt }
+        )
+      );
+
+      configData.uploadConfig.pinataConfig = {
+        jwt,
+        apiGateway,
+        contentGateway,
+        parallelLimit,
+      };
     }
   }
 
+  // Mutability
+  configData.isMutable = await term.waitForUserInput(
+    "Do you want your NFTs to remain mutable? We HIGHLY recommend you choose yes.",
+    { confirm: true }
+  );
+
+  // Guards
+  configData.guards = null;
+
   // Save the file
-  PgTerminal.logWasm(`\n[2/2] ${Emoji.PAPER} Saving config file\n`);
+  term.println(`\n[2/2] ${Emoji.PAPER} Saving config file\n`);
 
   const explorer = await PgExplorer.get();
-  const configPath = PgExplorer.joinPaths([
-    explorer.currentWorkspacePath,
-    PgExplorer.PATHS.CANDY_MACHINE_CONFIG_FILEPATH,
-  ]);
 
   let saveFile = true;
-  if (await explorer.exists(configPath)) {
+  if (await explorer.exists(PgExplorer.PATHS.CANDY_MACHINE_CONFIG_FILEPATH)) {
     saveFile =
       (await term.waitForUserInput(
         [
@@ -451,28 +308,34 @@ export const processCreateConfig = async (
         ].join(" "),
         {
           default: "0",
-          multiChoice: {
+          choice: {
             items: ["Overwrite the file", "Log to console"],
-            chooseOne: true,
           },
         }
       )) === 0;
   }
 
+  const prettyConfigData = PgCommon.prettyJSON(configData);
+
   if (saveFile) {
-    PgTerminal.logWasm(
+    term.println(
       `Saving config to file: "${PgExplorer.PATHS.CANDY_MACHINE_CONFIG_FILEPATH}"\n`
     );
-    await explorer.newItem(configPath, JSON.stringify(configData, null, 2), {
-      override: true,
-    });
-    PgTerminal.logWasm(
+    await explorer.newItem(
+      PgExplorer.PATHS.CANDY_MACHINE_CONFIG_FILEPATH,
+      prettyConfigData,
+      {
+        override: true,
+        openOptions: { onlyOpenIfAlreadyOpen: true },
+      }
+    );
+    term.println(
       `${PgTerminal.secondary("Successfully generated the config file.")} ${
         Emoji.CONFETTI
       }`
     );
   } else {
-    PgTerminal.logWasm("Logging config to console:\n");
-    PgTerminal.logWasm(configData);
+    term.println(PgTerminal.secondaryText("Logging config to console:\n"));
+    term.println(prettyConfigData);
   }
 };

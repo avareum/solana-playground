@@ -7,8 +7,7 @@ import PopButton from "../../../PopButton";
 import Settings from "../Right/Settings";
 import useActiveTab, { ID_PREFIX } from "./useActiveTab";
 import { GITHUB_URL } from "../../../../constants";
-import { PgCommon } from "../../../../utils/pg";
-import { Sidebar } from "../sidebar-state";
+import { PgCommon, Sidebar } from "../../../../utils/pg";
 import { sidebarData } from "./sidebar-data";
 
 interface LeftProps {
@@ -43,15 +42,28 @@ const Left: FC<LeftProps> = ({
     <Wrapper>
       <Icons>
         <Top>
-          {sidebarData.top.map((data, i) => (
-            <IconButton
-              key={i}
-              id={ID_PREFIX + data.value}
-              title={PgCommon.getKeybindTextOS(data.title)}
-              src={data.src}
-              onClick={() => handleSidebarChange(data.value)}
-            />
-          ))}
+          {/* TODO: Remove this check when there are more tutorials */}
+          {process.env.NODE_ENV === "production"
+            ? sidebarData.top
+                .filter((data) => data.value !== Sidebar.TUTORIALS)
+                .map((data, i) => (
+                  <IconButton
+                    key={i}
+                    id={ID_PREFIX + data.value}
+                    title={PgCommon.getKeybindTextOS(data.title)}
+                    src={data.src}
+                    onClick={() => handleSidebarChange(data.value)}
+                  />
+                ))
+            : sidebarData.top.map((data, i) => (
+                <IconButton
+                  key={i}
+                  id={ID_PREFIX + data.value}
+                  title={PgCommon.getKeybindTextOS(data.title)}
+                  src={data.src}
+                  onClick={() => handleSidebarChange(data.value)}
+                />
+              ))}
         </Top>
         <Bottom>
           {sidebarData.bottom.map((data, i) => {
@@ -63,11 +75,7 @@ const Left: FC<LeftProps> = ({
               );
 
             return (
-              <PopButton
-                key={i}
-                PopElement={Settings}
-                buttonProps={{ ...data }}
-              />
+              <PopButton key={i} PopElement={Settings} buttonProps={data} />
             );
           })}
         </Bottom>

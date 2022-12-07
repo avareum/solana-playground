@@ -25,7 +25,7 @@ const TEXT_SECONDARY = "#555555";
 // State
 const COMMENT = "#238000";
 const SELECTION = "#e5ebf1";
-const HOVER = "#00000010";
+const HOVER = "#ecedee";
 const DISABLED = "#cccccc";
 
 export const LIGHT: PgTheme = {
@@ -44,6 +44,7 @@ export const LIGHT: PgTheme = {
     state: {
       hover: {
         bg: HOVER,
+        color: "#71717110",
       },
       disabled: {
         bg: DISABLED,
@@ -83,7 +84,7 @@ export const LIGHT: PgTheme = {
       },
     },
     iconButton: {
-      selectedBg: HOVER,
+      selectedBg: "#00000020",
       selectedBorderColor: BG_LIGHT,
     },
     contrast: {
@@ -93,12 +94,6 @@ export const LIGHT: PgTheme = {
     },
     bottom: {
       color: BG_WHITE,
-    },
-    home: {
-      bg: BG_LIGHT,
-      card: {
-        bg: BG_WHITE,
-      },
     },
   },
   skeleton: {

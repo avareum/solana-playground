@@ -3,6 +3,11 @@ type BgAndColor = {
   color?: string;
 };
 
+type StateColor = {
+  color: string;
+  bg?: string;
+};
+
 export type Font = {
   family: string;
   size: {
@@ -158,12 +163,12 @@ export interface PgTheme {
     };
 
     state: {
-      hover: BgAndColor;
-      disabled: BgAndColor;
-      error: BgAndColor;
-      success: BgAndColor;
-      warning: BgAndColor;
-      info: BgAndColor;
+      hover: StateColor;
+      disabled: StateColor;
+      error: StateColor;
+      success: StateColor;
+      warning: StateColor;
+      info: StateColor;
     };
 
     // Bottom bar
@@ -218,6 +223,11 @@ export interface PgTheme {
     // Icon panel
     left?: BgAndColor; // bgPrimary, textPrimary
 
+    // Markdown component
+    markdown?: BgAndColor & {
+      code?: BgAndColor;
+    };
+
     // Side right panel
     right?: BgAndColor & { otherBg?: string };
 
@@ -229,11 +239,20 @@ export interface PgTheme {
 
     // General tooltip
     tooltip?: BgAndColor;
+
+    // Tutorial component
+    tutorial?: BgAndColor;
+
+    // Tutorials section
+    tutorials?: BgAndColor & { card?: BgAndColor };
   };
 
   borderRadius?: string;
   boxShadow?: string;
-  font?: Font;
+  font?: {
+    code?: Font;
+    other?: Font;
+  };
   scrollbar?: Scrollbar;
   skeleton?: Skeleton;
   transparency?: Transparency;

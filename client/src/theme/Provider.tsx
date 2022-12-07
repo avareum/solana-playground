@@ -14,6 +14,7 @@ import { Font, PgTheme } from "./interface";
 import {
   PG_BORDER_RADIUS,
   PG_BOX_SHADOW,
+  PG_FONT_OTHER,
   PG_SCROLLBAR,
   PG_SKELETON,
   PG_TRANSITION,
@@ -41,6 +42,26 @@ const MutThemeProvider: FC = ({ children }) => {
   /// Set defaults
   // Transparency
   if (!_theme.transparency) _theme.transparency = PG_TRANSPARENCY;
+
+  // State
+  if (!_theme.colors.state.disabled.bg)
+    _theme.colors.state.disabled.bg =
+      _theme.colors.state.disabled.color + _theme.transparency.low;
+  if (!_theme.colors.state.error.bg)
+    _theme.colors.state.error.bg =
+      _theme.colors.state.error.color + _theme.transparency.low;
+  if (!_theme.colors.state.hover.bg)
+    _theme.colors.state.hover.bg =
+      _theme.colors.state.hover.color + _theme.transparency.low;
+  if (!_theme.colors.state.info.bg)
+    _theme.colors.state.info.bg =
+      _theme.colors.state.info.color + _theme.transparency.low;
+  if (!_theme.colors.state.success.bg)
+    _theme.colors.state.success.bg =
+      _theme.colors.state.success.color + _theme.transparency.low;
+  if (!_theme.colors.state.warning.bg)
+    _theme.colors.state.warning.bg =
+      _theme.colors.state.warning.color + _theme.transparency.low;
 
   // Border radius
   if (!_theme.borderRadius) _theme.borderRadius = PG_BORDER_RADIUS;
@@ -106,7 +127,7 @@ const MutThemeProvider: FC = ({ children }) => {
   // Gutter
   if (!_theme.colors.editor?.gutter) _theme.colors.editor.gutter = {};
   if (!_theme.colors.editor.gutter.bg)
-    _theme.colors.editor.gutter.bg = "inherit";
+    _theme.colors.editor.gutter.bg = _theme.colors.editor.bg;
   if (!_theme.colors.editor.gutter.color)
     _theme.colors.editor.gutter.color = _theme.colors.default.textSecondary;
 
@@ -124,13 +145,28 @@ const MutThemeProvider: FC = ({ children }) => {
       _theme.colors.default.textPrimary;
 
   // Home
-  if (!_theme.colors.home)
-    _theme.colors.home = {
-      bg: _theme.colors.default.bgPrimary,
-      card: {
-        bg: _theme.colors.default.bgSecondary,
-      },
-    };
+  if (!_theme.colors.home) _theme.colors.home = {};
+  if (!_theme.colors.home.bg)
+    _theme.colors.home.bg = _theme.colors.default.bgSecondary;
+  if (!_theme.colors.home.color)
+    _theme.colors.home.color = _theme.colors.default.textPrimary;
+  if (!_theme.colors.home.card) _theme.colors.home.card = {};
+  if (!_theme.colors.home.card.bg)
+    _theme.colors.home.card.bg = _theme.colors.default.bgPrimary;
+  if (!_theme.colors.home.card.color)
+    _theme.colors.home.card.color = _theme.colors.default.textPrimary;
+
+  // Markdown
+  if (!_theme.colors.markdown) _theme.colors.markdown = {};
+  if (!_theme.colors.markdown.bg)
+    _theme.colors.markdown.bg = _theme.colors.default.bgPrimary;
+  if (!_theme.colors.markdown.color)
+    _theme.colors.markdown.color = _theme.colors.default.textPrimary;
+  if (!_theme.colors.markdown.code) _theme.colors.markdown.code = {};
+  if (!_theme.colors.markdown.code.bg)
+    _theme.colors.markdown.code.bg = _theme.colors.default.bgSecondary;
+  if (!_theme.colors.markdown.code.color)
+    _theme.colors.markdown.code.color = _theme.colors.default.textPrimary;
 
   // Terminal
   if (!_theme.colors.terminal)
@@ -147,6 +183,25 @@ const MutThemeProvider: FC = ({ children }) => {
       bg: _theme.colors.default.bgPrimary,
       color: _theme.colors.default.textPrimary,
     };
+
+  // Tutorial
+  if (!_theme.colors.tutorial) _theme.colors.tutorial = {};
+  if (!_theme.colors.tutorial.bg)
+    _theme.colors.tutorial.bg = _theme.colors.default.bgSecondary;
+  if (!_theme.colors.tutorial.color)
+    _theme.colors.tutorial.color = _theme.colors.default.textPrimary;
+
+  // Tutorials
+  if (!_theme.colors.tutorials) _theme.colors.tutorials = {};
+  if (!_theme.colors.tutorials.bg)
+    _theme.colors.tutorials.bg = _theme.colors.default.bgSecondary;
+  if (!_theme.colors.tutorials.color)
+    _theme.colors.tutorials.color = _theme.colors.default.textPrimary;
+  if (!_theme.colors.tutorials.card) _theme.colors.tutorials.card = {};
+  if (!_theme.colors.tutorials.card.bg)
+    _theme.colors.tutorials.card.bg = _theme.colors.default.bgPrimary;
+  if (!_theme.colors.tutorials.card.color)
+    _theme.colors.tutorials.card.color = _theme.colors.default.textPrimary;
 
   // Scrollbar
   if (!_theme.scrollbar) {
@@ -165,7 +220,9 @@ const MutThemeProvider: FC = ({ children }) => {
 
   // Update theme.font when theme or font changes
   useEffect(() => {
-    if (theme && theme.font !== font) setTheme((t) => ({ ...t, font }));
+    if (theme && theme.font?.code !== font) {
+      setTheme((t) => ({ ...t, font: { code: font, other: PG_FONT_OTHER } }));
+    }
   }, [theme, font, setTheme]);
 
   return (

@@ -8,23 +8,21 @@ import {
   Dispatch,
   SetStateAction,
 } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useAtom } from "jotai";
 import styled, { css } from "styled-components";
 import { Resizable } from "re-resizable";
 
 import TestSkeleton from "./Test/TestSkeleton";
 import { Wormhole } from "../../../Loading";
 import { ClassName, Id } from "../../../../constants";
-import { TAB_HEIGHT } from "../../Main/Tabs";
-import { Sidebar } from "../sidebar-state";
-import { PgExplorer, PgShare } from "../../../../utils/pg";
-import { explorerAtom, refreshExplorerAtom } from "../../../../state";
+import { TAB_HEIGHT } from "../../Main/MainView/Tabs";
+import { usePlaygroundRouter } from "./usePlaygroundRouter";
+import { Sidebar } from "../../../../utils/pg";
 
 const Explorer = lazy(() => import("./Explorer"));
 // const Search = lazy(() => import("./Search"));
 const BuildDeploy = lazy(() => import("./BuildDeploy"));
 const Test = lazy(() => import("./Test"));
+const Tutorials = lazy(() => import("./Tutorials"));
 
 interface DefaultRightProps {
   sidebarState: string;
@@ -36,43 +34,7 @@ interface RightProps extends DefaultRightProps {
 }
 
 const Right: FC<RightProps> = ({ sidebarState, width, setWidth }) => {
-  const [explorer, setExplorer] = useAtom(explorerAtom);
-  const [, refreshExplorer] = useAtom(refreshExplorerAtom);
-
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (pathname === "/") {
-      (async () => {
-        try {
-          const explorer = new PgExplorer(refreshExplorer);
-          await explorer.init();
-          setExplorer(explorer);
-        } catch (e: any) {
-          console.log(e.message);
-        }
-      })();
-    } else {
-      // Shared project
-      (async () => {
-        try {
-          const explorerData = await PgShare.get(pathname);
-          setExplorer(new PgExplorer(refreshExplorer, explorerData));
-        } catch {
-          // Couldn't get the data
-          // Redirect to main
-          navigate("/");
-        }
-      })();
-    }
-  }, [pathname, navigate, setExplorer, refreshExplorer]);
-
-  useEffect(() => {
-    if (explorer) setLoading(false);
-  }, [explorer, setLoading]);
+  const { loading } = usePlaygroundRouter();
 
   const [height, setHeight] = useState({
     window:
@@ -96,7 +58,7 @@ const Right: FC<RightProps> = ({ sidebarState, width, setWidth }) => {
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [setHeight]);
+  }, []);
 
   const handleResizeStop = useCallback(
     (e, direction, ref, d) => {
@@ -152,6 +114,8 @@ const Inside: FC<DefaultRightProps> = ({ sidebarState }) => {
       return <BuildDeploy />;
     case Sidebar.TEST:
       return <Test />;
+    case Sidebar.TUTORIALS:
+      return <Tutorials />;
     default:
       return null;
   }

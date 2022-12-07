@@ -21,6 +21,7 @@ import { PgCommon } from "../common";
 import { PgProgramInfo } from "../program-info";
 import { PgMethod, PgReturnType } from "../types";
 import { PgValidator } from "../validator";
+import { PrintOptions } from "./types";
 
 export class PgTerminal {
   /**
@@ -36,9 +37,10 @@ export class PgTerminal {
   static readonly MIN_HEIGHT = 36;
 
   /**
-   * Maximum height for the terminal
-   * This is to fix bottom of the terminal not being visible due to
-   * incorrect resizing
+   * Maximum height for the terminal.
+   *
+   * This is for fixing bottom of the terminal not being visible due to
+   * incorrect resizing.
    */
   static get MAX_HEIGHT() {
     const tabHeight = document
@@ -50,6 +52,8 @@ export class PgTerminal {
 
     if (tabHeight && bottomHeight) {
       return window.innerHeight - (tabHeight + bottomHeight);
+    } else if (bottomHeight) {
+      return window.innerHeight - bottomHeight;
     }
 
     return this.DEFAULT_HEIGHT;
@@ -58,15 +62,14 @@ export class PgTerminal {
   /**
    * Welcome text
    */
-  static readonly DEFAULT_TEXT = `Welcome to ${PgTerminal.bold(PROJECT_NAME)}.
-
-Popular crates for Solana development are available to use.
-
-See the list of available crates and request new crates from: ${PgTerminal.underline(
-    GITHUB_URL
-  )}
-
-Type ${PgTerminal.bold("help")} to see all commands.`;
+  static readonly DEFAULT_TEXT = [
+    `Welcome to ${PgTerminal.bold(PROJECT_NAME)}.`,
+    `Popular crates for Solana development are available to use.`,
+    `See the list of available crates and request new crates from ${PgTerminal.underline(
+      GITHUB_URL
+    )}`,
+    `Type ${PgTerminal.bold("help")} to see all commands.\n`,
+  ].join("\n\n");
 
   /** Default prompt string before entering commands */
   static readonly PROMPT_PREFIX = "$ ";
@@ -150,26 +153,37 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
       // Match until ':' from the start of the line: e.g SUBCOMMANDS:
       // TODO: Highlight the text from WASM so we don't have to do this.
       .replace(/^(.*?:)/gm, (match) => {
-        if (new RegExp(/[http|{|}]/).test(match)) return match;
-        if (match.startsWith(" ") && !match.includes("   ")) {
-          console.log(match);
-          return this.bold(match); // Indented
+        if (
+          new RegExp(/(http|{|})/).test(match) ||
+          new RegExp(/"\w+":/).test(match) ||
+          new RegExp(/\(\w+:/).test(match) ||
+          new RegExp(/^\s*\|/).test(match) ||
+          new RegExp(/^\s?\d+/).test(match)
+        ) {
+          return match;
         }
-        if (!match.toLowerCase().includes("error") && !match.includes("  ")) {
-          return this.primary(match);
+        if (!match.includes("   ")) {
+          if (match.startsWith(" ")) {
+            return this.bold(match); // Indented
+          }
+          if (!match.toLowerCase().includes("error")) {
+            return this.primary(match);
+          }
         }
 
         return match;
       })
 
       // Secondary text color for (...)
-      .replace(/\(.*\)/gm, (match) => this.secondaryText(match))
+      .replace(/\(.+\)/gm, (match) =>
+        match === "(s)" ? match : this.secondaryText(match)
+      )
 
       // Numbers
       .replace(/^\s*\d+$/, (match) => this.secondary(match))
 
       // Progression [1/5]
-      .replace(/\[\d+\/\d+\]/, (match) => this.bold(match));
+      .replace(/\[\d+\/\d+\]/, (match) => this.bold(this.secondaryText(match)));
 
     return text;
   }
@@ -209,7 +223,7 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
           .replace("\n", ".\n"); // Time passed
     }
 
-    return stderr;
+    return stderr.substring(0, stderr.length - 1);
   }
 
   /**
@@ -285,7 +299,7 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
   /**
    * Gets whether the terminal is focused or in blur
    */
-  static isTerminalFocused() {
+  static isFocused() {
     return document
       .getElementsByClassName("terminal xterm xterm-dom-renderer-owner-1")[0]
       ?.classList.contains("focus");
@@ -316,11 +330,19 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
 
   /**
    * Log terminal messages from anywhere
+   */
+  static async log(msg: any, opts?: PrintOptions) {
+    await this.run({ println: [msg, opts] });
+  }
+
+  // TODO: Remove
+  /**
+   * Log terminal messages from anywhere
    *
    * Mainly used from WASM
    */
   static logWasm(msg: any) {
-    PgCommon.createAndDispatchCustomEvent(EventName.TERMINAL_LOG, { msg });
+    this.log(msg);
   }
 
   /**
@@ -342,7 +364,7 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
     try {
       return await cb();
     } catch (e: any) {
-      this.logWasm(`Process error: ${e.message}`);
+      this.log(`Process error: ${e.message}`);
     } finally {
       this.enable();
     }
@@ -393,6 +415,20 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
   }
 
   /**
+   * Set progressbar percentage.
+   *
+   * Progress bar will be hidden if `progress` is set to 0.
+   *
+   * @param progress progress percentage in 0-100
+   */
+  static setProgress(progress: number) {
+    PgCommon.createAndDispatchCustomEvent(
+      EventName.TERMINAL_PROGRESS_SET,
+      progress
+    );
+  }
+
+  /**
    * Redifined console.log for showing mocha logs in the playground terminal
    */
   static consoleLog(msg: string, ...rest: any[]) {
@@ -415,7 +451,7 @@ Type ${PgTerminal.bold("help")} to see all commands.`;
           // TODO: show where the error actually happened in user code
           .replace(/\s+at.*$/gm, "");
 
-        PgTerminal.logWasm(editedMessage);
+        PgTerminal.log(editedMessage);
       }
     }
   }
@@ -545,9 +581,11 @@ export class PgTerm {
   /**
    * Print a message to terminal
    */
-  print(message: string, sync?: boolean) {
-    // For some reason, double new lines are not respected. Thus, fixing that here
-    message = message.replace(/\n\n/g, "\n \n");
+  print(msg: any, opts?: PrintOptions) {
+    if (typeof msg === "string") {
+      // For some reason, double new lines are not respected. Thus, fixing that here
+      msg = msg.replace(/\n\n/g, "\n \n");
+    }
 
     if (!this._isOpen) {
       return;
@@ -556,30 +594,20 @@ export class PgTerm {
     if (this._pgShell.isPrompting()) {
       // Cancel the current prompt and restart
       this._pgShell.printAndRestartPrompt(() => {
-        this._pgTty.print(message + "\n", sync);
+        this._pgTty.print(msg + "\n", opts);
         return undefined;
       });
       return;
     }
 
-    this._pgTty.print(message, sync);
+    this._pgTty.print(msg, opts);
   }
 
   /**
    * Print a message with end line character appended
    */
-  println(message: string, sync?: boolean) {
-    this.print(message + "\n", sync);
-  }
-
-  /**
-   * Run the line as command
-   */
-  runCommand(line: string) {
-    if (this._pgShell.isPrompting()) {
-      this._pgTty.setInput(line);
-      this._pgShell.handleReadComplete();
-    }
+  println(msg: any, opts?: PrintOptions) {
+    this.print(msg, { ...opts, newLine: true });
   }
 
   /**
@@ -657,10 +685,11 @@ export class PgTerm {
    * @param msg message to print to the terminal before prompting user
    * @param opts -
    * - allowEmpty: whether to allow the input to be empty
+   * - choice.items: set of values to choose from. Returns the selected index if
+   * `allowMultiple` is not specified.
+   * - choice.allowMultiple: whether to allow multiple choices. Returns the indices.
    * - confirm: yes/no question. Returns the result as boolean.
    * - default: default value to set
-   * - multiChoice.items: set of values to choose from. Returns the selected indices.
-   * - multiChoice.chooseOne: whether to choose only one. Returns the selected index.
    * - validator: callback function to validate the user input
    * @returns user input
    */
@@ -669,11 +698,13 @@ export class PgTerm {
       allowEmpty?: boolean;
       confirm?: boolean;
       default?: string;
-      multiChoice?: {
+      choice?: {
         items: string[];
-        chooseOne?: boolean;
+        allowMultiple?: boolean;
       };
-      validator?: (userInput: string) => boolean | void;
+      validator?: (
+        userInput: string
+      ) => boolean | void | Promise<boolean | void>;
     }
   >(
     msg: string,
@@ -681,24 +712,24 @@ export class PgTerm {
   ): Promise<
     O["confirm"] extends boolean
       ? boolean
-      : O["multiChoice"] extends object
-      ? O["multiChoice"]["chooseOne"] extends boolean
-        ? number
-        : number[]
+      : O["choice"] extends object
+      ? O["choice"]["allowMultiple"] extends boolean
+        ? number[]
+        : number
       : string
   > {
     let convertedMsg = msg;
     if (opts?.default) {
       convertedMsg += ` (default: ${opts.default})`;
     }
-    if (opts?.multiChoice) {
+    if (opts?.choice) {
       // Show multi choice items
-      convertedMsg += opts.multiChoice.items.reduce(
-        (acc, cur, i) => acc + `[${i}] - ${cur}\n`,
+      convertedMsg += opts.choice.items.reduce(
+        (acc, cur, i) => acc + `\n[${i}] - ${cur}`,
         "\n"
       );
     } else if (opts?.confirm) {
-      convertedMsg = PgTerminal.secondaryText(` [yes/no]`);
+      convertedMsg += PgTerminal.secondaryText(` [yes/no]`);
     }
 
     let userInput = await this._pgShell.waitForUserInput(convertedMsg);
@@ -714,40 +745,42 @@ export class PgTerm {
       }
 
       // Validate multi choice
-      if (opts.multiChoice) {
-        const multiChoiceMaxLength = opts.multiChoice.items.length - 1;
+      if (opts.choice) {
+        const choiceMaxLength = opts.choice.items.length - 1;
         opts.validator = (input) => {
           const parsed: number[] = JSON.parse(`[${input}]`);
           return (
-            (opts.multiChoice?.chooseOne ? parsed.length === 1 : true) &&
+            (opts.choice?.allowMultiple ? true : parsed.length === 1) &&
             parsed.every(
               (v) =>
                 PgValidator.isInt(v.toString()) &&
                 v >= 0 &&
-                v <= multiChoiceMaxLength
+                v <= choiceMaxLength
             )
           );
         };
       }
     }
 
-    // Default
+    // Allow empty
     if (!userInput && !opts?.allowEmpty) {
-      PgTerminal.logWasm(PgTerminal.error("Can't be empty."));
+      this.println(PgTerminal.error("Can't be empty.\n"));
       return await this.waitForUserInput(msg, opts);
     }
 
     // Validator
-    if (opts?.validator) {
+    if (opts?.validator && userInput) {
       try {
-        if (opts.validator(userInput) === false) {
-          PgTerminal.logWasm(
+        if ((await opts.validator(userInput)) === false) {
+          this.println(
             PgTerminal.error(`'${userInput}' is not a valid value.\n`)
           );
           return await this.waitForUserInput(msg, opts);
         }
       } catch (e: any) {
-        PgTerminal.logWasm(PgTerminal.error(`${e.message}\n`));
+        this.println(
+          PgTerminal.error(`${e.message || `Validation failed: ${e}`}\n`)
+        );
         return await this.waitForUserInput(msg, opts);
       }
     }
@@ -760,11 +793,11 @@ export class PgTerm {
       returnValue = userInput === "yes" ? true : false;
     }
     // Multichoice
-    else if (opts?.multiChoice) {
-      if (opts.multiChoice.chooseOne) {
-        returnValue = parseInt(userInput);
-      } else {
+    else if (opts?.choice) {
+      if (opts.choice.allowMultiple) {
         returnValue = JSON.parse(`[${userInput}]`);
+      } else {
+        returnValue = parseInt(userInput);
       }
     }
     // Default as string
@@ -772,7 +805,7 @@ export class PgTerm {
       returnValue = userInput;
     }
 
-    let visibleText = PgTerminal.success(returnValue);
+    let visibleText = PgTerminal.success(userInput);
     if (returnValue === "" || returnValue?.length === 0) {
       visibleText = PgTerminal.secondaryText("empty");
     }

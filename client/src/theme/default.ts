@@ -1,4 +1,10 @@
-import { Scrollbar, Skeleton, Transition, Transparency } from "./interface";
+import {
+  Font,
+  Scrollbar,
+  Skeleton,
+  Transition,
+  Transparency,
+} from "./interface";
 
 export const PG_BOX_SHADOW = "rgb(0 0 0 / 25%) -1px 3px 4px";
 
@@ -41,6 +47,17 @@ export const PG_TRANSITION: Transition = {
 
 export const PG_TRANSPARENCY: Transparency = {
   low: "16",
-  medium: "56",
-  high: "99",
+  medium: "64",
+  high: "BB",
+};
+
+export const PG_FONT_OTHER: Font = {
+  family: `-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+  sans-serif, "Apple Color Emoji", "Segoe UI Emoji"`,
+  size: {
+    small: "0.875rem",
+    medium: "1rem",
+    large: "1.25rem",
+    xlarge: "1.5rem",
+  },
 };

@@ -43,6 +43,7 @@ export const SOLANA: PgTheme = {
       },
       hover: {
         bg: HOVER_BG,
+        color: "#91939e",
       },
       info: {
         color: BLUE,
@@ -92,6 +93,15 @@ export const SOLANA: PgTheme = {
     toast: {
       bg: BG_GRAY,
       color: TEXT_PRIMARY,
+    },
+    tutorial: {
+      bg: BG_BLACK,
+    },
+    tutorials: {
+      bg: BG_BLACK,
+      card: {
+        bg: BG_GRAY,
+      },
     },
   },
   skeleton: {

@@ -7,6 +7,7 @@ export enum Lang {
   TYPESCRIPT = "TypeScript",
   JAVASCRIPT_TEST = "JavaScript Test",
   TYPESCRIPT_TEST = "TypeScript Test",
+  JSON = "JSON",
 }
 
 export interface Framework {
@@ -22,7 +23,7 @@ export const FRAMEWORKS: Framework[] = [
   {
     name: "Native",
     language: Lang.RUST,
-    src: "icons/platforms/solana.png",
+    src: "/icons/platforms/solana.png",
     files: [
       [
         "src/lib.rs",
@@ -278,7 +279,7 @@ describe("Test", () => {
       [
         "src/fizzbuzz.py",
         `# fizzbuzz
-# Built with Seahorse v0.1.6
+# Built with Seahorse v0.2.4
 #
 # On-chain, persistent FizzBuzz!
 
@@ -286,7 +287,7 @@ from seahorse.prelude import *
 
 # This is your program's public key and it will update
 # automatically when you build the project.
-declare_id('11111111111111111111111111111111');
+declare_id('11111111111111111111111111111111')
 
 class FizzBuzz(Account):
   fizz: bool

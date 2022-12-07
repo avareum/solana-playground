@@ -8,15 +8,12 @@ import Button from "../../../Button";
 import Progress from "../../../Progress";
 import { useTerminal } from "./useTerminal";
 import { Clear, Close, DoubleArrow, Tick } from "../../../Icons";
-import { terminalOutputAtom, terminalProgressAtom } from "../../../../state";
+import { terminalProgressAtom } from "../../../../state";
 import { PgCommon, PgEditor, PgTerm, PgTerminal } from "../../../../utils/pg";
-import { EventName } from "../../../../constants";
+import { EventName, Id } from "../../../../constants";
 import { useExposeStatic } from "../../../../hooks";
 
 const Terminal = () => {
-  const [terminalOutput] = useAtom(terminalOutputAtom);
-  const [progress] = useAtom(terminalProgressAtom);
-
   const terminalRef = useRef<HTMLDivElement>(null);
 
   useTerminal();
@@ -36,6 +33,7 @@ const Terminal = () => {
         brightBlue: theme.colors.state.info.color,
         brightMagenta: theme.colors.default.primary,
         black: theme.colors.default.textSecondary,
+        brightBlack: theme.colors.default.textSecondary,
         brightCyan: theme.colors.default.secondary,
         background: theme.colors.terminal?.bg,
         foreground: theme.colors.terminal?.color,
@@ -56,18 +54,8 @@ const Terminal = () => {
 
       term.open(terminalRef.current);
       term.fit();
-
-      // This runs after theme change
-      if (hasChild) term.println("");
     }
   }, [term]);
-
-  // New output
-  useEffect(() => {
-    if (terminalRef.current) {
-      term.println(PgTerminal.colorText(terminalOutput));
-    }
-  }, [terminalOutput, term]);
 
   // Resize
   const [height, setHeight] = useState(PgTerminal.DEFAULT_HEIGHT);
@@ -142,12 +130,14 @@ const Terminal = () => {
         switch (key) {
           case "L":
             e.preventDefault();
-            clear();
+            if (PgTerminal.isFocused()) {
+              clear();
+            }
             break;
 
           case "`":
             e.preventDefault();
-            if (PgTerminal.isTerminalFocused()) {
+            if (PgTerminal.isFocused()) {
               toggleClose();
               PgEditor.focus();
             } else if (!height) {
@@ -248,9 +238,9 @@ const Terminal = () => {
         topLeft: false,
       }}
     >
-      <Wrapper>
+      <Wrapper id={Id.TERMINAL}>
         <Topbar>
-          <Progress value={progress} />
+          <TerminalProgress />
           <ButtonsWrapper>
             <Button
               kind="icon"
@@ -317,6 +307,11 @@ const Wrapper = styled.div`
   `}
 `;
 
+const TerminalProgress = () => {
+  const [progress] = useAtom(terminalProgressAtom);
+  return <Progress value={progress} />;
+};
+
 const Topbar = styled.div`
   display: flex;
   justify-content: space-between;
@@ -350,8 +345,8 @@ const TerminalWrapper = styled.div`
     }
 
     & .xterm-rows {
-      font-family: ${theme.font?.family} !important;
-      font-size: ${theme.font?.size.medium} !important;
+      font-family: ${theme.font?.code?.family} !important;
+      font-size: ${theme.font?.code?.size.medium} !important;
     }
   `}
 `;

@@ -21,8 +21,8 @@ type KV = {
 export interface TxVals {
   name: string;
   additionalSigners: KV;
-  accs?: KV;
-  args?: KV;
+  accs: KV;
+  args: any[];
 }
 
 export type Seed = {
@@ -51,7 +51,7 @@ const DEFAULT_TYPES: IdlType[] = [
 
 export class PgTest {
   /**
-   * Convert types into string for UI
+   * Convert types into string to display in UI
    *
    * @returns the human readable type
    */
@@ -199,10 +199,6 @@ export class PgTest {
         parsedV = [];
         for (const el of userArray) {
           parsedV.push(this.parse(el, insideType as IdlType));
-        }
-
-        if (!parsedV.every((el) => typeof el === typeof insideType)) {
-          throw new Error("Invalid vec");
         }
       } else if (outerType === "Option" || outerType === "COption") {
         switch (v.toLowerCase()) {
@@ -352,20 +348,17 @@ export class PgTest {
     conn: Connection,
     wallet: PgWallet | AnchorWallet
   ) {
+    // Get program
     const program = this.getProgram(idl, conn, wallet);
 
-    const tx = new Transaction();
-
-    let argValues = [];
-    for (const argName in txVals.args) {
-      argValues.push(txVals.args[argName]);
-    }
-
     // Create method
-    const method = program.methods[txVals.name](...argValues);
+    const method = program.methods[txVals.name](...txVals.args);
 
     // Create instruction
     const ix = await method.accounts(txVals.accs as {}).instruction();
+
+    // Create tx
+    const tx = new Transaction();
 
     // Add ix to tx
     tx.add(ix);

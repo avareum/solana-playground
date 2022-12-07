@@ -28,10 +28,8 @@ const Transactions = () => {
     const getTxs = async () => {
       setLoading(true);
       try {
-        await PgCommon.sleep();
-        const _signatures = await conn.getSignaturesForAddress(
-          currentWallet.publicKey,
-          { limit: 10 }
+        const _signatures = await PgCommon.transition(
+          conn.getSignaturesForAddress(currentWallet.publicKey, { limit: 10 })
         );
 
         setSignatures(_signatures);
@@ -119,7 +117,7 @@ const Tx: FC<ConfirmedSignatureInfo> = ({
   const now = new Date().getTime() / 1000;
   const timePassed = PgCommon.secondsToTime(now - (blockTime ?? 0));
 
-  const [explorer, solscan] = PgCommon.getExplorerTxUrls(
+  const { explorer, solscan } = PgCommon.getExplorerTxUrls(
     signature,
     conn.endpoint!
   );
@@ -174,7 +172,7 @@ const TxsTop = styled.div`
   ${({ theme }) => css`
     padding: 0.5rem 1rem;
     display: flex;
-    font-size: ${theme.font?.size.small};
+    font-size: ${theme.font?.code?.size.small};
     color: ${theme.colors.default.textSecondary};
     background-color: ${theme.colors.default.bgSecondary};
     font-weight: bold;
@@ -189,7 +187,7 @@ const TxWrapper = styled.div`
   ${({ theme }) => css`
     padding: 0.5rem 1rem;
     display: flex;
-    font-size: ${theme.font?.size.small};
+    font-size: ${theme.font?.code?.size.small};
     color: ${theme.colors.default.textSecondary};
 
     &:not(:last-child) {

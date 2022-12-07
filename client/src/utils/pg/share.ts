@@ -1,6 +1,7 @@
 import { SERVER_URL } from "../../constants";
 import { PgCommon } from "./common";
 import { PgExplorer, ExplorerJSON } from "./explorer";
+import { PgValidator } from "./validator";
 
 export interface ShareJSON {
   files: {
@@ -19,8 +20,7 @@ export class PgShare {
   static async get(id: string) {
     const resp = await fetch(`${SERVER_URL}/share${id}`);
 
-    const result = await PgCommon.checkForRespErr(resp.clone());
-    if (result?.err) throw new Error(result.err);
+    await PgCommon.checkForRespErr(resp.clone());
 
     const shareData: ShareJSON = await resp.json();
 
@@ -58,11 +58,20 @@ export class PgShare {
       }),
     });
 
-    const result = await PgCommon.checkForRespErr(resp.clone());
-    if (result?.err) throw new Error(result.err);
+    const arrayBuffer = await PgCommon.checkForRespErr(resp.clone());
 
-    const objectId = PgCommon.decodeArrayBuffer(result.arrayBuffer!);
+    const objectId = PgCommon.decodeBytes(arrayBuffer);
 
     return objectId;
+  }
+
+  /**
+   * Get whether the current pathname is in a valid format
+   *
+   * @param pathname current pathname
+   * @returns whether the current pathname is in a valid format
+   */
+  static isValidPathname(pathname: string) {
+    return PgValidator.isHex(pathname.substring(1));
   }
 }

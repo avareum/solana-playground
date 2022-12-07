@@ -2,12 +2,15 @@ import { ComponentType, useEffect } from "react";
 import { useAtom } from "jotai";
 import styled from "styled-components";
 
+import useModal from "./useModal";
 import { modalAtom } from "../../state";
 import { PgCommon } from "../../utils/pg";
 import { EventName } from "../../constants";
 
 const Modal = () => {
   const [modal, setModal] = useAtom(modalAtom);
+
+  const { close } = useModal();
 
   // Events
   useEffect(() => {
@@ -16,14 +19,16 @@ const Modal = () => {
     ).send;
 
     // Set modal from custom event
-    const handleModalSet = (e: UIEvent & { detail: { el: ComponentType } }) => {
+    const handleModalSet = (
+      e: UIEvent & { detail: { el: ComponentType; props: object } }
+    ) => {
       const El = e.detail.el;
-      setModal(El ? <El /> : null);
+      El ? setModal(<El {...e.detail.props} />) : close();
     };
 
     // Close modal on ESC
     const handleKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") setModal(null);
+      if (e.key === "Escape") close();
     };
 
     document.addEventListener(eventName, handleModalSet as EventListener);
@@ -33,7 +38,7 @@ const Modal = () => {
       document.removeEventListener(eventName, handleModalSet as EventListener);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [setModal]);
+  }, [setModal, close]);
 
   return modal ? <Wrapper>{modal}</Wrapper> : null;
 };

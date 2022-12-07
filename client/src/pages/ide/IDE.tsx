@@ -1,14 +1,16 @@
 import styled, { css } from "styled-components";
 
-import Modal from "../../components/Modal";
 import Panels from "../../components/Panels";
+import Modal from "../../components/Modal";
 import Statics from "../../components/Statics";
+import ClientHelper from "../../components/ClientHelper";
 
 const IDE = () => (
   <Wrapper>
     <Panels />
     <Modal />
     <Statics />
+    <ClientHelper />
   </Wrapper>
 );
 
@@ -17,8 +19,8 @@ const Wrapper = styled.div`
   ${({ theme }) => css`
     background-color: ${theme.colors.default.bgPrimary};
     color: ${theme.colors.default.textPrimary};
-    font-family: ${theme.font?.family};
-    font-size: ${theme.font?.size.medium};
+    font-family: ${theme.font?.code?.family};
+    font-size: ${theme.font?.code?.size.medium};
 
     & svg {
       color: ${theme.colors.default.textSecondary};

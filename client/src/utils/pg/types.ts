@@ -4,8 +4,13 @@ export type PgMethod<T> = {
 
 export type PgReturnType<T, U> = U extends keyof T
   ? T[U] extends (...args: any[]) => any
-    ? ReturnType<T[U]>
+    ? Awaited<ReturnType<T[U]>>
     : T[U]
   : never;
 
 export type TupleString = [string, string];
+
+export type PgDisposable = {
+  /** Clear registered events */
+  dispose: () => void;
+};

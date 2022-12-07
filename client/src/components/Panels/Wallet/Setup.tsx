@@ -35,7 +35,7 @@ const Setup: FC<SetupProps> = ({ onSubmit }) => {
     try {
       const file = files[0];
       const arrayBuffer = await file.arrayBuffer();
-      const decodedString = PgCommon.decodeArrayBuffer(arrayBuffer);
+      const decodedString = PgCommon.decodeBytes(arrayBuffer);
       const buffer = Buffer.from(JSON.parse(decodedString));
 
       // Validate keypair
@@ -57,7 +57,11 @@ const Setup: FC<SetupProps> = ({ onSubmit }) => {
   return (
     <ModalInside
       title="Playground Wallet"
-      buttonProps={{ name: "Continue", onSubmit: handleSetup }}
+      buttonProps={{
+        name: "Continue",
+        onSubmit: handleSetup,
+        closeOnSubmit: true,
+      }}
     >
       <InsideWrapper>
         <Content>
@@ -143,7 +147,7 @@ const WalletButtonsWrapper = styled.div`
 const KeypairText = styled.div`
   ${({ theme }) => css`
     margin-top: 1rem;
-    font-size: ${theme.font?.size.small};
+    font-size: ${theme.font?.code?.size.small};
     color: ${theme.colors.default.textSecondary};
   `}
 `;

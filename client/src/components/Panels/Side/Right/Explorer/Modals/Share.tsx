@@ -30,10 +30,9 @@ export const Share = () => {
     if (!explorer) return;
 
     setDisabled(true);
-    await PgCommon.sleep();
 
     try {
-      const id = await PgShare.new(explorer);
+      const id = await PgCommon.transition(PgShare.new(explorer));
       setTextState({
         type: "Success",
         id,
@@ -47,7 +46,6 @@ export const Share = () => {
   }, [explorer]);
 
   const shareLink = `${CLIENT_URL}/${textState.id}`;
-  const httpsLink = "https://" + shareLink;
 
   return (
     <ModalInside title>
@@ -69,10 +67,10 @@ export const Share = () => {
           <SuccessWrapper>
             <InputWrapper>
               <Input value={shareLink} fullWidth readOnly />
-              <CopyButton copyText={httpsLink} />
+              <CopyButton copyText={shareLink} />
             </InputWrapper>
             <LinkWrapper>
-              <Link href={httpsLink}>Go to the link</Link>
+              <Link href={shareLink}>Go to the link</Link>
             </LinkWrapper>
           </SuccessWrapper>
         )}
@@ -84,7 +82,9 @@ export const Share = () => {
           </Button>
         ) : (
           <>
-            <Button onClick={close}>Cancel</Button>
+            <Button onClick={close} kind="transparent">
+              Cancel
+            </Button>
             <Button
               onClick={share}
               disabled={disabled}

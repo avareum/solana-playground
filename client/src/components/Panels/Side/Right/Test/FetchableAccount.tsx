@@ -1,5 +1,5 @@
-import { ChangeEvent, FC, useEffect, useState } from "react";
-import { BN, Idl } from "@project-serum/anchor";
+import { ChangeEvent, FC, useState } from "react";
+import { Idl } from "@project-serum/anchor";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import styled, { css } from "styled-components";
@@ -12,6 +12,7 @@ import { ClassName } from "../../../../../constants";
 import { PgAccount, PgCommon } from "../../../../../utils/pg";
 import { SpinnerWithBg } from "../../../../Loading";
 import { useCurrentWallet } from "../../../Wallet";
+import { CodeResult } from "./CodeResult";
 
 interface FetchableAccountProps {
   accountName: string;
@@ -51,20 +52,6 @@ const FetchableAccountInside: FC<FetchableAccountProps> = ({
   const [fetchAllLoading, setFetchAllLoading] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
 
-  useEffect(() => {
-    // The default BN.toJSON is a hex string, but we want a readable string
-    // Temporarily change it to use a plain toString while this component is mounted
-    const oldBNPrototypeToJSON = BN.prototype.toJSON;
-    BN.prototype.toJSON = function (this: BN) {
-      return this.toString();
-    };
-
-    // Change the toJSON prototype back on unmount
-    return () => {
-      BN.prototype.toJSON = oldBNPrototypeToJSON;
-    };
-  }, []);
-
   const handleAddressChange = (e: ChangeEvent<HTMLInputElement>) => {
     const address = e.target.value;
     if (address) {
@@ -101,14 +88,15 @@ const FetchableAccountInside: FC<FetchableAccountProps> = ({
   const fetchOne = async () => {
     if (!currentWallet) return;
     setFetchOneLoading(true);
-    await PgCommon.sleep();
     try {
-      const accountData = await PgAccount.fetchOne(
-        accountName,
-        new PublicKey(enteredAddress),
-        idl,
-        conn,
-        currentWallet
+      const accountData = await PgCommon.transition(
+        PgAccount.fetchOne(
+          accountName,
+          new PublicKey(enteredAddress),
+          idl,
+          conn,
+          currentWallet
+        )
       );
       handleFetched(accountData);
     } catch (err: any) {
@@ -121,13 +109,9 @@ const FetchableAccountInside: FC<FetchableAccountProps> = ({
   const fetchAll = async () => {
     if (!currentWallet) return;
     setFetchAllLoading(true);
-    await PgCommon.sleep();
     try {
-      const accountData = await PgAccount.fetchAll(
-        accountName,
-        idl,
-        conn,
-        currentWallet
+      const accountData = await PgCommon.transition(
+        PgAccount.fetchAll(accountName, idl, conn, currentWallet)
       );
       handleFetched(accountData);
     } catch (err: any) {
@@ -180,13 +164,13 @@ const FetchableAccountInside: FC<FetchableAccountProps> = ({
             setOpen={setResultOpen}
           >
             <SpinnerWithBg loading={fetchOneLoading || fetchAllLoading}>
-              <Result index={index}>
+              <CodeResult index={index}>
                 {fetchError ? (
                   <ErrorWrapper>{fetchError}</ErrorWrapper>
                 ) : (
-                  JSON.stringify(fetchedData, null, 2)
+                  PgCommon.prettyJSON(fetchedData!)
                 )}
-              </Result>
+              </CodeResult>
             </SpinnerWithBg>
           </Foldable>
         </ResultWrapper>
@@ -228,45 +212,6 @@ const ButtonsWrapper = styled.div`
 const ResultWrapper = styled.div`
   margin-top: 1rem;
   width: 100%;
-`;
-
-const Result = styled.pre<IndexProp>`
-  ${({ theme, index }) => css`
-    margin-top: 0.25rem;
-    user-select: text;
-    width: 100%;
-    overflow-x: auto;
-    padding: 0.75rem 0.5rem;
-    background-color: ${index % 2 === 1
-      ? theme.colors.right?.otherBg
-      : theme.colors.right?.bg};
-    border-radius: ${theme.borderRadius};
-
-    /* Scrollbar */
-    /* Chromium */
-    &::-webkit-scrollbar {
-      height: 0.5rem;
-    }
-
-    &::-webkit-scrollbar-track {
-      background-color: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      border: 0.25rem solid transparent;
-      border-radius: ${theme.borderRadius};
-      background-color: ${theme.scrollbar?.thumb.color};
-    }
-
-    &::-webkit-scrollbar-thumb:hover {
-      background-color: ${theme.scrollbar?.thumb.hoverColor};
-    }
-
-    /* Firefox */
-    & * {
-      scrollbar-color: ${theme.scrollbar?.thumb.color};
-    }
-  `}
 `;
 
 const ErrorWrapper = styled.div`

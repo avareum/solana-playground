@@ -5,7 +5,11 @@ import styled from "styled-components";
 import DownloadButton from "../../../../../DownloadButton";
 import UploadButton from "../../../../../UploadButton";
 import { buildCountAtom } from "../../../../../../state";
-import { PgCommon, PgProgramInfo } from "../../../../../../utils/pg";
+import {
+  PgCommon,
+  PgExplorer,
+  PgProgramInfo,
+} from "../../../../../../utils/pg";
 
 const IDL = () => (
   <Wrapper>
@@ -22,13 +26,14 @@ const Import = () => {
     try {
       const file = files[0];
       const arrayBuffer = await file.arrayBuffer();
-      const decodedString = PgCommon.decodeArrayBuffer(arrayBuffer);
+      const decodedString = PgCommon.decodeBytes(arrayBuffer);
 
       PgProgramInfo.update({
         idl: JSON.parse(decodedString),
       });
-    } catch (err: any) {
-      console.log(err.message);
+      PgExplorer.run({ saveProgramInfo: [] });
+    } catch (e: any) {
+      console.log(e.message);
     }
   };
 

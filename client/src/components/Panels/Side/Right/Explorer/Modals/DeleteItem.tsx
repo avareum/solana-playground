@@ -29,7 +29,14 @@ export const DeleteItem: FC<DeleteItemProps> = ({ path }) => {
   if (!itemName) return null;
 
   return (
-    <ModalInside title buttonProps={{ name: "Delete", onSubmit: deleteItem }}>
+    <ModalInside
+      title
+      buttonProps={{
+        name: "Delete",
+        onSubmit: deleteItem,
+        closeOnSubmit: true,
+      }}
+    >
       <Content>
         <Icon>
           <Warning fullSize />
@@ -68,7 +75,7 @@ const Main = styled.span`
 const Desc = styled.span`
   ${({ theme }) => css`
     margin-top: 0.5rem;
-    font-size: ${theme.font?.size.small};
+    font-size: ${theme.font?.code?.size.small};
     color: ${theme.colors.default.textSecondary};
   `}
 `;

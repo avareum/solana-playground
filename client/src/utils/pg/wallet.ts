@@ -1,5 +1,6 @@
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { AnchorWallet } from "@solana/wallet-adapter-react";
+import * as ed25519 from "@noble/ed25519";
 
 import { PgTerminal } from "./terminal/";
 import { PgCommon } from "./common";
@@ -63,6 +64,16 @@ export class PgWallet implements AnchorWallet {
     return txs;
   }
 
+  /**
+   * Sign arbitrary messages
+   *
+   * @param message message to sign
+   * @returns signature of the signed message
+   */
+  async signMessage(message: Uint8Array): Promise<Uint8Array> {
+    return await ed25519.sign(message, this.keypair.secretKey.slice(0, 32));
+  }
+
   // Statics
   private static readonly _WALLET_KEY = "wallet";
 
@@ -111,14 +122,13 @@ export class PgWallet implements AnchorWallet {
   static checkIsPgConnected() {
     if (this.getLs()?.connected) return true;
 
-    PgTerminal.logWasm(
+    PgTerminal.log(
       `${PgTerminal.bold(
         "Playground Wallet"
       )} must be connected to run this command. Run ${PgTerminal.bold(
         "connect"
       )} to connect.`
     );
-    PgTerminal.enable();
 
     return false;
   }

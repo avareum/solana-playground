@@ -3,27 +3,24 @@ import { useAtom } from "jotai";
 
 import {
   buildCountAtom,
-  explorerAtom,
   TerminalAction,
-  terminalOutputAtom,
   terminalStateAtom,
 } from "../../../../../state";
-import { PgBuild, PgPkg, PgTerminal } from "../../../../../utils/pg";
+import { PgBuild, PgExplorer, PgTerminal } from "../../../../../utils/pg";
 
 export const useBuild = () => {
-  const [explorer] = useAtom(explorerAtom);
   const [, setTerminalState] = useAtom(terminalStateAtom);
-  const [, setTerminal] = useAtom(terminalOutputAtom);
   const [, setBuildCount] = useAtom(buildCountAtom);
 
   const runBuild = useCallback(() => {
     PgTerminal.runCmd(async () => {
-      setTerminalState(TerminalAction.buildStop);
+      setTerminalState([
+        TerminalAction.buildStop,
+        TerminalAction.buildLoadingStart,
+      ]);
+      PgTerminal.log(PgTerminal.info("Building..."));
 
-      if (!explorer) return;
-
-      setTerminalState(TerminalAction.buildLoadingStart);
-      setTerminal(PgTerminal.info("Building..."));
+      const explorer = await PgExplorer.get();
 
       let msg = "";
       try {
@@ -35,10 +32,7 @@ export const useBuild = () => {
         let result: { stderr: string };
 
         if (pythonFiles.length > 0) {
-          const seahorsePkgToBuild = await PgPkg.loadPkg(
-            PgPkg.SEAHORSE_COMPILE
-          );
-          result = await PgBuild.buildPython(pythonFiles, seahorsePkgToBuild);
+          result = await PgBuild.buildPython(pythonFiles);
         } else {
           result = await PgBuild.buildRust(files);
         }
@@ -51,14 +45,14 @@ export const useBuild = () => {
         const convertedError = PgTerminal.convertErrorMessage(e.message);
         msg = `Build error: ${convertedError}`;
       } finally {
-        setTerminal(msg);
+        PgTerminal.log(msg + "\n");
         setTerminalState(TerminalAction.buildLoadingStop);
 
         // Update program info in IndexedDB
         await explorer.saveProgramInfo();
       }
     });
-  }, [explorer, setTerminal, setBuildCount, setTerminalState]);
+  }, [setBuildCount, setTerminalState]);
 
   return { runBuild };
 };

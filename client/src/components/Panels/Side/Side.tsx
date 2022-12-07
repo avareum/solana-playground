@@ -1,13 +1,19 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import Left from "./Left";
 import Right from "./Right";
-import { Sidebar } from "./sidebar-state";
-import { PgCommon } from "../../../utils/pg";
+import { PgCommon, Sidebar } from "../../../utils/pg";
+import { EventName, Route } from "../../../constants";
+import { useSetStatic } from "../../../hooks";
 
 const Side = () => {
-  const [sidebarState, setSidebarState] = useState(Sidebar.EXPLORER);
+  const { pathname } = useLocation();
+
+  const [sidebarState, setSidebarState] = useState(
+    pathname.startsWith(Route.TUTORIALS) ? Sidebar.TUTORIALS : Sidebar.EXPLORER
+  );
   const [width, setWidth] = useState(320);
   const [oldWidth, setOldWidth] = useState(width);
 
@@ -16,6 +22,15 @@ const Side = () => {
   }, [width, setOldWidth]);
 
   const oldSidebarRef = useRef(sidebarState);
+
+  useSetStatic(setSidebarState, EventName.VIEW_SIDEBAR_STATE_SET);
+
+  useEffect(() => {
+    PgCommon.createAndDispatchCustomEvent(
+      EventName.VIEW_ON_DID_CHANGE_SIDEBAR_STATE,
+      { state: sidebarState }
+    );
+  }, [sidebarState]);
 
   // Keybinds
   useEffect(() => {
@@ -27,7 +42,8 @@ const Side = () => {
             width !== 0 &&
             ((state === Sidebar.EXPLORER && key === "E") ||
               (state === Sidebar.BUILD_DEPLOY && key === "B") ||
-              (state === Sidebar.TEST && key === "D"));
+              (state === Sidebar.TEST && key === "D") ||
+              (state === Sidebar.TUTORIALS && key === "L"));
 
           const preventDefaultAndSetWidth = (w: number = oldWidth) => {
             e.preventDefault();
@@ -46,6 +62,10 @@ const Side = () => {
             // T doesn't work
             preventDefaultAndSetWidth();
             return Sidebar.TEST;
+          } else if (key === "L") {
+            // T doesn't work
+            preventDefaultAndSetWidth();
+            return Sidebar.TUTORIALS;
           }
 
           return state;

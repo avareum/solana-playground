@@ -9,7 +9,7 @@ import {
   EXPLORER_URL,
   Id,
   NETWORKS,
-  CUSTOM_NETWORK_NAME,
+  NetworkName,
   ClassName,
 } from "../../../constants";
 import { PgCommon } from "../../../utils/pg";
@@ -31,15 +31,15 @@ const Bottom = () => {
   const [networkName, cluster] = useMemo(() => {
     return [
       NETWORKS.filter((n) => n.endpoint === conn.rpcEndpoint)[0]?.name ??
-        CUSTOM_NETWORK_NAME,
-      PgCommon.getExplorerCluster(conn.rpcEndpoint),
+        NetworkName.CUSTOM,
+      PgCommon.getExplorerClusterParam(conn.rpcEndpoint),
     ];
-  }, [conn]);
+  }, [conn.rpcEndpoint]);
 
   return (
     <Wrapper id={Id.BOTTOM}>
       <Tooltip text="Toggle Playground Wallet">
-        <Button onClick={handleConnectPg}>
+        <Button onClick={handleConnectPg} kind="transparent">
           <ConnStatus connStatus={connStatus}></ConnStatus>
           {connStatus}
         </Button>
@@ -75,15 +75,17 @@ export const BOTTOM_HEIGHT = "1.5rem";
 
 const Wrapper = styled.div`
   ${({ theme }) => css`
+    --bottom-color: ${theme.colors.bottom?.color ?? "inherit"};
+
     height: ${BOTTOM_HEIGHT};
     width: 100%;
     display: flex;
     align-items: center;
     padding: 0 0.5rem;
-    font-size: ${theme.font?.size.small};
+    font-size: ${theme.font?.code?.size.small};
     background-color: ${theme.colors.bottom?.bg ??
     theme.colors.default.primary};
-    color: ${theme.colors.bottom?.color ?? "inherit"};
+    color: var(--bottom-color);
 
     & .${ClassName.TOOLTIP} {
       height: 100%;
@@ -98,6 +100,10 @@ const Wrapper = styled.div`
           background-color: ${theme.colors.default.primary +
           theme.transparency?.low};
         }
+      }
+
+      & svg {
+        color: var(--bottom-color) !important;
       }
     }
   `}
