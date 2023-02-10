@@ -1,28 +1,30 @@
-import { useRef } from "react";
 import styled, { css } from "styled-components";
 
 import TutorialCard from "./TutorialCard";
 import { TUTORIALS } from "../../../../../tutorials";
+import { StyledDefaultLink } from "../../../../Link";
 
-const Tutorials = () => {
-  const insideWrapperRef = useRef<HTMLDivElement>(null);
+const Tutorials = () => (
+  <Wrapper>
+    <TutorialsOuterWrapper>
+      <TopSection>
+        <Title>Learn</Title>
+      </TopSection>
 
-  return (
-    <Wrapper>
-      <TutorialsOuterWrapper>
-        <TopSection>
-          <Title>Learn</Title>
-        </TopSection>
+      <TutorialsInsideWrapper>
+        {TUTORIALS.map((t, i) => (
+          <TutorialCard key={i} {...t} />
+        ))}
+      </TutorialsInsideWrapper>
 
-        <TutorialsInsideWrapper ref={insideWrapperRef}>
-          {TUTORIALS.map((t, i) => (
-            <TutorialCard key={i} {...t} />
-          ))}
-        </TutorialsInsideWrapper>
-      </TutorialsOuterWrapper>
-    </Wrapper>
-  );
-};
+      <BottomSection>
+        <StyledDefaultLink href="https://github.com/solana-playground/solana-playground/tree/master/client/src/tutorials">
+          Contribute
+        </StyledDefaultLink>
+      </BottomSection>
+    </TutorialsOuterWrapper>
+  </Wrapper>
+);
 
 const Wrapper = styled.div`
   ${({ theme }) => css`
@@ -64,11 +66,8 @@ const Wrapper = styled.div`
 `;
 
 const TutorialsOuterWrapper = styled.div`
-  --max-container-width: 68rem;
-
   padding: 2rem 3rem;
   height: fit-content;
-  width: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -76,19 +75,25 @@ const TutorialsOuterWrapper = styled.div`
 `;
 
 const TopSection = styled.div`
+  display: flex;
+  justify-content: space-between;
   width: 100%;
-  max-width: var(--max-container-width);
 `;
 
 const Title = styled.h1``;
 
 const TutorialsInsideWrapper = styled.div`
-  margin: 2rem 0;
-  gap: 2rem;
-  width: 100%;
   display: flex;
   flex-wrap: wrap;
-  max-width: var(--max-container-width);
+  gap: 2rem;
+  margin: 2rem 0;
+  max-width: 64rem;
+`;
+
+const BottomSection = styled.div`
+  display: flex;
+  justify-content: center;
+  width: 100%;
 `;
 
 export default Tutorials;

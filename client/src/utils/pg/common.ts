@@ -1,7 +1,6 @@
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 
 import { Endpoint, EXPLORER_URL, SOLSCAN_URL } from "../../constants";
-import { PgConnection } from "./connection";
 
 export class PgCommon {
   /**
@@ -48,6 +47,33 @@ export class PgCommon {
     } catch {
       console.log("Timed out");
     }
+  }
+
+  /**
+   * Try the callback until the return value of the callback is a non-falsy value.
+   *
+   * NOTE: Only use this function if you are certain the return value of the
+   * callback will eventually be a non-falsy value. It's not a good idea to use
+   * this function when the return value can be a falsy value due to possible
+   * infinite loop from this function.
+   *
+   * @param cb callback function to try
+   * @param tryInterval optional try interval
+   * @returns the non-nullable return value of the callback
+   */
+  static async tryUntilSuccess<T>(
+    cb: () => Promise<T>,
+    tryInterval: number = 1000
+  ) {
+    let returnValue: T;
+    while (1) {
+      returnValue = await cb();
+      if (returnValue) break;
+
+      await this.sleep(tryInterval);
+    }
+
+    return returnValue!;
   }
 
   /**
@@ -100,6 +126,22 @@ export class PgCommon {
   }
 
   /**
+   * Compare values by `JSON.stringify`
+   */
+  static compareValues(val1: any, val2: any) {
+    return JSON.stringify(val1) === JSON.stringify(val2);
+  }
+
+  /**
+   * @returns the JS number(only use it if you are certain this won't overflow)
+   */
+  static bigintToInt<T extends bigint | undefined>(bigint: T) {
+    return (
+      bigint?.toString() ? +bigint.toString() : undefined
+    ) as T extends bigint ? number : undefined;
+  }
+
+  /**
    * Convert seconds into human readable string format
    */
   static secondsToTime(secs: number) {
@@ -117,6 +159,13 @@ export class PgCommon {
   }
 
   /**
+   * @returns the current UNIX timestamp(sec)
+   */
+  static getUnixTimstamp() {
+    return Math.floor(Date.now() / 1000);
+  }
+
+  /**
    * @returns utf-8 encoded string from the arg
    */
   static getUtf8EncodedString(object: object) {
@@ -127,9 +176,11 @@ export class PgCommon {
   }
 
   /**
-   * Only used for adding cluster param to explorer url(s)
+   * Get the cluster URL parameter to add to the explorer URL(s)
+   *
+   * @returns the cluster URL suffix
    */
-  static getExplorerClusterParam(endpoint: string = PgConnection.endpoint) {
+  static getExplorerClusterParam(endpoint: string) {
     // Mainnet by default
     let cluster = "";
 
@@ -138,9 +189,11 @@ export class PgCommon {
     } else if (
       endpoint === Endpoint.DEVNET ||
       endpoint === Endpoint.DEVNET_GENESYSGO
-    )
+    ) {
       cluster = "?cluster=devnet";
-    else if (endpoint === Endpoint.TESTNET) cluster = "?cluster=testnet";
+    } else if (endpoint === Endpoint.TESTNET) {
+      cluster = "?cluster=testnet";
+    }
 
     return cluster;
   }
@@ -150,10 +203,7 @@ export class PgCommon {
    *
    * @returns transaction url for solana explorer, solscan
    */
-  static getExplorerTxUrls(
-    txHash: string,
-    endpoint: Endpoint = PgConnection.endpoint
-  ) {
+  static getExplorerTxUrls(txHash: string, endpoint: Endpoint) {
     let explorer = EXPLORER_URL + "/tx/" + txHash;
     const cluster = this.getExplorerClusterParam(endpoint);
     explorer += cluster;
@@ -173,10 +223,7 @@ export class PgCommon {
    *
    * @returns mint url for solana explorer, solscan
    */
-  static getExplorerTokenUrl(
-    mint: string,
-    endpoint: Endpoint = PgConnection.endpoint
-  ) {
+  static getExplorerTokenUrl(mint: string, endpoint: string) {
     let explorer = EXPLORER_URL + "/address/" + mint;
     const cluster = this.getExplorerClusterParam(endpoint);
     explorer += cluster;
@@ -273,8 +320,10 @@ export class PgCommon {
   /**
    * @returns automatic airdrop amount
    */
-  static getAirdropAmount(endpoint: Endpoint = PgConnection.endpoint) {
+  static getAirdropAmount(endpoint: string) {
     switch (endpoint) {
+      case Endpoint.PLAYNET:
+        return 1000;
       case Endpoint.LOCALHOST:
         return 100;
       case Endpoint.DEVNET:
@@ -427,6 +476,39 @@ export class PgCommon {
       timeStyle: opts?.timeStyle ?? "long",
       timeZone: opts?.timeZone ?? "UTC",
     }).format(unixTs * 1e3);
+  }
+
+  /**
+   * Append '/' to the end of the string
+   *
+   * @param str string to append slash to
+   * @returns the slash appended string
+   */
+  static appendSlash(str: string) {
+    if (!str) return "";
+    return str + (str.endsWith("/") ? "" : "/");
+  }
+
+  /**
+   * Get the string without '/' prefix
+   *
+   * @param str string input
+   * @returns the string without slash prefix
+   */
+  static withoutPreSlash(str: string) {
+    return str[0] === "/" ? str.substring(1) : str;
+  }
+
+  /**
+   * Join the paths without caring about incorrect '/' inside paths
+   *
+   * @param paths paths to join
+   * @returns the joined path
+   */
+  static joinPaths(paths: string[]) {
+    return paths.reduce(
+      (acc, cur) => this.appendSlash(acc) + this.withoutPreSlash(cur)
+    );
   }
 
   /**

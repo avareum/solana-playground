@@ -2,9 +2,9 @@ import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useAtom } from "jotai";
 import styled, { css } from "styled-components";
 
-import ModalInside from "../../../../../Modal/ModalInside";
+import Modal from "../../../../../Modal";
 import useModal from "../../../../../Modal/useModal";
-import Input, { defaultInputProps } from "../../../../../Input";
+import Input from "../../../../../Input";
 import { explorerAtom } from "../../../../../../state";
 import { ClassName } from "../../../../../../constants";
 
@@ -46,7 +46,7 @@ export const RenameWorkspace = () => {
   };
 
   return (
-    <ModalInside
+    <Modal
       buttonProps={{
         name: "Rename",
         onSubmit: renameWorkspace,
@@ -62,10 +62,9 @@ export const RenameWorkspace = () => {
           onChange={handleChange}
           value={newName}
           className={error ? ClassName.ERROR : ""}
-          {...defaultInputProps}
         />
       </Content>
-    </ModalInside>
+    </Modal>
   );
 };
 

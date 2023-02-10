@@ -22,6 +22,7 @@ import { PgProgramInfo } from "../program-info";
 import { PgMethod, PgReturnType } from "../types";
 import { PgValidator } from "../validator";
 import { PrintOptions } from "./types";
+import { PgCommand } from "./commands";
 
 export class PgTerminal {
   /**
@@ -358,7 +359,7 @@ export class PgTerminal {
    * This function should be used as a wrapper function when calling any
    * terminal command.
    */
-  static async runCmd<T>(cb: () => Promise<T>) {
+  static async process<T>(cb: () => Promise<T>) {
     this.disable();
     this.scrollToBottom();
     try {
@@ -380,7 +381,7 @@ export class PgTerminal {
   /**
    * Dispatch run cmd from str custom event
    */
-  static runCmdFromStr(cmd: string) {
+  static executeFromStr(cmd: string) {
     PgCommon.createAndDispatchCustomEvent(
       EventName.TERMINAL_RUN_CMD_FROM_STR,
       cmd
@@ -415,6 +416,13 @@ export class PgTerminal {
   }
 
   /**
+   * Execute the given command
+   */
+  static async execute(...args: Parameters<PgTerm["execute"]>) {
+    await PgTerminal.run({ execute: [...args] });
+  }
+
+  /**
    * Set progressbar percentage.
    *
    * Progress bar will be hidden if `progress` is set to 0.
@@ -432,11 +440,11 @@ export class PgTerminal {
    * Redifined console.log for showing mocha logs in the playground terminal
    */
   static consoleLog(msg: string, ...rest: any[]) {
-    if (msg !== undefined) {
-      const fullMessage = format(msg, ...rest);
-      _log(fullMessage);
+    _log(msg, ...rest);
 
+    if (msg !== undefined) {
       // We only want to log mocha logs to the terminal
+      const fullMessage = format(msg, ...rest);
       if (fullMessage.startsWith("  ")) {
         const editedMessage = fullMessage
           // Replace checkmark icon
@@ -499,6 +507,9 @@ export class PgTerm {
     this._xterm.onData(this._pgShell.handleTermData);
 
     this._isOpen = false;
+
+    // Load commands
+    PgCommand.load();
   }
 
   open(container: HTMLElement) {
@@ -611,13 +622,19 @@ export class PgTerm {
   }
 
   /**
-   * Moves the command line to the top of the terminal screen
+   * Clear terminal screen. This will move the cursor to the top of the terminal
+   * but will not clear xterm buffer by default.
    *
-   * This function does not clear previous history.
+   * @param opts.full whether to fully clean xterm buffer
+   *
    */
-  clear() {
+  clear(opts?: { full?: boolean }) {
     this._pgTty.clearTty();
-    this._pgTty.print(`${PgTerminal.PROMPT_PREFIX}${this._pgTty.getInput()}`);
+    if (opts?.full) {
+      this._pgTty.clear();
+    } else {
+      this._pgTty.print(`${PgTerminal.PROMPT_PREFIX}${this._pgTty.getInput()}`);
+    }
   }
 
   /**
@@ -654,6 +671,37 @@ export class PgTerm {
     delete this._xterm;
   }
 
+  // TODO: Make async
+  /**
+   * Write the given input in the terminal and press `Enter`
+   *
+   * @param cmd command to run
+   * @param clearCmd whether to clean the command afterwards - defaults to `true`
+   */
+  executeFromStr(cmd: string, clearCmd: boolean = true) {
+    this._pgTty.setInput(cmd);
+    this._pgShell.handleReadComplete(clearCmd);
+  }
+
+  // TODO: Make async
+  /**
+   * Execute the given command
+   *
+   * @param cmd {command: args}
+   * @param clearCmd whether to clean the command afterwards
+   */
+  execute<K extends keyof typeof PgCommand["CMD_NAMES"]>(
+    cmd: {
+      [Name in K]?: string;
+    },
+    clearCmd?: boolean
+  ) {
+    for (const cmdName in cmd) {
+      const args = cmd[cmdName as K];
+      this.executeFromStr(`${cmdName} ${args}`, clearCmd);
+    }
+  }
+
   /**
    * Run the last command if it exists
    *
@@ -662,21 +710,13 @@ export class PgTerm {
   runLastCmd() {
     // Last command is the current input
     let lastCmd = this._pgTty.getInput();
-    if (!lastCmd) {
+    if (!lastCmd || lastCmd === PgCommand.CMD_NAMES.runLastCmd) {
       const maybeLastCmd = this._pgShell.getHistory().getPrevious();
       if (maybeLastCmd) lastCmd = maybeLastCmd;
       else this.println("Unable to run last command.");
     }
 
-    this.runCmdFromStr(lastCmd);
-  }
-
-  /**
-   * Write the given input in the terminal and press enter
-   */
-  runCmdFromStr(cmd: string) {
-    this._pgTty.setInput(cmd);
-    this._pgShell.handleReadComplete(true);
+    this.executeFromStr(lastCmd);
   }
 
   /**

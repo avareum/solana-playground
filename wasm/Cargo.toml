@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "anchor-cli",
     "seahorse-compile",
     "solana-cli",
     "solana-client",
@@ -7,3 +8,4 @@ members = [
     "sugar-cli",
     "utils/*"
 ]
+exclude = ["playnet"]

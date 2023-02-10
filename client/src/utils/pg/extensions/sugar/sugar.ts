@@ -1,8 +1,7 @@
 // @ts-nocheck
 
 import { Emoji, NETWORKS } from "../../../../constants";
-import { PgConnection } from "../../connection";
-import { PgTerminal } from "../../terminal";
+import { PgCommon, PgConnection, PgTerminal } from "../..";
 import {
   processBundlr,
   processCollectionSet,
@@ -30,6 +29,22 @@ import {
  * Metaplex Sugar CLI commands
  */
 export class PgSugar {
+  static PATHS = {
+    METAPLEX_DIRNAME: "metaplex",
+    get CANDY_MACHINE_DIR_PATH() {
+      return PgCommon.joinPaths([this.METAPLEX_DIRNAME, "candy-machine"]);
+    },
+    get CANDY_MACHINE_CONFIG_FILEPATH() {
+      return PgCommon.joinPaths([this.CANDY_MACHINE_DIR_PATH, "config.json"]);
+    },
+    get CANDY_MACHINE_CACHE_FILEPATH() {
+      return PgCommon.joinPaths([this.CANDY_MACHINE_DIR_PATH, "cache.json"]);
+    },
+    get CANDY_MACHINE_ASSETS_DIR_PATH() {
+      return PgCommon.joinPaths([this.CANDY_MACHINE_DIR_PATH, "assets"]);
+    },
+  };
+
   static async bundlr(...args) {
     await this._run(() => processBundlr(...args));
   }

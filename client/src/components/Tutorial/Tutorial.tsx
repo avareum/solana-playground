@@ -4,7 +4,7 @@ import styled, { css } from "styled-components";
 import Split from "react-split";
 
 import Button from "../Button";
-import Markdown from "./Markdown";
+import Markdown from "../Markdown";
 import EditorWithTabs from "../Panels/Main/MainView/EditorWithTabs";
 import { TAB_HEIGHT } from "../Panels/Main/MainView/Tabs";
 import {
@@ -56,18 +56,15 @@ export const Tutorial: FC<TutorialComponentProps> = ({
         );
         if (metadata.completed) {
           setIsCompleted(true);
-          setCurrentPage(0);
-          PgView.setSidebarState(Sidebar.TUTORIALS);
-        } else {
-          setCurrentPage(metadata.pageNumber);
-          PgView.setSidebarState((state) => {
-            if (state === Sidebar.TUTORIALS) {
-              return Sidebar.EXPLORER;
-            }
-
-            return state;
-          });
         }
+        setCurrentPage(metadata.pageNumber);
+        PgView.setSidebarState((state) => {
+          if (state === Sidebar.TUTORIALS) {
+            return Sidebar.EXPLORER;
+          }
+
+          return state;
+        });
       } catch {
         setCurrentPage(0);
       } finally {
@@ -237,7 +234,7 @@ export const Tutorial: FC<TutorialComponentProps> = ({
           </TutorialMainPage>
         </TutorialMainPageWrapper>
       ) : (
-        <PagesWrapper rtl={rtl}>
+        <PagesWrapper rtl={rtl} sizes={[60, 40]}>
           <EditorWrapper>
             <EditorWithTabs />
           </EditorWrapper>
@@ -413,12 +410,11 @@ const PagesWrapper = styled(Split)<Pick<TutorialComponentProps, "rtl">>`
   display: flex;
   flex-direction: ${({ rtl }) => (rtl ? "row-reverse" : "row")};
   width: 100%;
-  overflow: auto;
   height: -webkit-fill-available;
   max-height: 100%;
+  overflow: auto;
 
   & > div:not(.gutter) {
-    width: 50%;
     min-width: 25%;
   }
 
@@ -438,7 +434,6 @@ const EditorWrapper = styled.div`
 
 const TutorialPage = styled.div`
   ${({ theme }) => css`
-    height: 100%;
     max-width: 60rem;
     overflow: auto;
     padding-top: ${TAB_HEIGHT};

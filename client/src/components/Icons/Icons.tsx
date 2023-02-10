@@ -1,3 +1,5 @@
+import { CSSProperties } from "react";
+
 import { ClassName } from "../../constants";
 
 interface IconProps {
@@ -19,9 +21,14 @@ const defaultProps = {
 };
 
 const getStyle = (props: IconProps) => {
-  let style: any = {};
-  if (props.color) style = { color: props.color };
-  if (props.fullSize) style = { ...style, width: "100%", height: "100%" };
+  let style: CSSProperties = {};
+  if (props.color) {
+    style.color = props.color;
+  }
+  if (props.fullSize) {
+    style.width = "100%";
+    style.height = "100%";
+  }
 
   return style;
 };
@@ -160,6 +167,15 @@ export const Error = (props: IconProps) => {
   );
 };
 
+export const Info = (props: IconProps) => {
+  return (
+    <svg {...defaultProps} viewBox="0 0 1024 1024" style={getStyle(props)}>
+      <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z"></path>
+      <path d="M464 336a48 48 0 1 0 96 0 48 48 0 1 0-96 0zm72 112h-48c-4.4 0-8 3.6-8 8v272c0 4.4 3.6 8 8 8h48c4.4 0 8-3.6 8-8V456c0-4.4-3.6-8-8-8z"></path>
+    </svg>
+  );
+};
+
 export const Clock = (props: IconProps) => {
   return (
     <svg {...defaultProps} viewBox="0 0 1024 1024" style={getStyle(props)}>
@@ -255,6 +271,16 @@ export const ExportFile = (props: IconProps) => {
   );
 };
 
+export const ImportWorkspace = (props: IconProps) => {
+  return (
+    <svg {...defaultProps} viewBox="0 0 1000 1000" style={getStyle(props)}>
+      <g>
+        <path d="M827.6,730.8c0,34.8-23.2,58-58,58H189.8c-34.8,0-58-29-58-58V429.3c0-23.2,11.6-40.6,29-52.2c17.4-46.4,40.6-87,69.6-127.6H184c-98.6,0-174,81.2-174,179.8v301.5c0,98.6,75.4,179.8,174,179.8h579.9c98.6,0,174-81.2,174-179.8V493.1l-116,87v150.8H827.6z M897.2,122c-174-81.2-382.7-5.8-463.9,174l-52.2-23.2c-17.4-11.6-46.4-5.8-58,5.8c-11.6,5.8-17.4,11.6-17.4,23.2c-5.8,11.6-5.8,23.2-5.8,34.8l58,289.9c5.8,17.4,17.4,34.8,34.8,40.6c17.4,5.8,34.8,5.8,52.2,0l255.1-139.2c11.6-5.8,17.4-17.4,23.2-29c5.8-5.8,5.8-17.4,5.8-29c0-23.2-11.6-40.6-34.8-52.2l-52.2-23.2c63.8-139.2,208.8-220.4,347.9-203C966.8,162.5,937.8,139.4,897.2,122z" />
+      </g>
+    </svg>
+  );
+};
+
 export const Wrench = (props: IconProps) => {
   return (
     <svg {...defaultProps} viewBox="0 0 24 24" style={getStyle(props)}>
@@ -342,6 +368,15 @@ export const QuestionMark = (props: IconProps) => {
   return (
     <svg {...defaultProps} viewBox="0 0 16 16" style={getStyle(props)}>
       <path d="M3 4.075a.423.423 0 0 0 .43.44H4.9c.247 0 .442-.2.475-.445.159-1.17.962-2.022 2.393-2.022 1.222 0 2.342.611 2.342 2.082 0 1.132-.668 1.652-1.72 2.444-1.2.872-2.15 1.89-2.082 3.542l.005.386c.003.244.202.44.446.44h1.445c.247 0 .446-.2.446-.446v-.188c0-1.278.487-1.652 1.8-2.647 1.086-.826 2.217-1.743 2.217-3.667C12.667 1.301 10.393 0 7.903 0 5.645 0 3.17 1.053 3.001 4.075zm2.776 10.273c0 .95.758 1.652 1.8 1.652 1.085 0 1.832-.702 1.832-1.652 0-.985-.747-1.675-1.833-1.675-1.04 0-1.799.69-1.799 1.675z"></path>
+    </svg>
+  );
+};
+
+export const QuestionMarkOutlined = (props: IconProps) => {
+  return (
+    <svg {...defaultProps} viewBox="0 0 16 16" style={getStyle(props)}>
+      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"></path>
+      <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"></path>
     </svg>
   );
 };

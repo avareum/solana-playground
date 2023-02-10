@@ -1,6 +1,4 @@
 import FS, { PromisifiedFS } from "@isomorphic-git/lightning-fs";
-import JSZip from "jszip";
-import { saveAs } from "file-saver";
 
 import { PgGithub } from "./github";
 import { PgWorkspace, Workspaces } from "./workspace";
@@ -66,7 +64,7 @@ export class PgExplorer {
   /** Internal state */
   private _explorer: ExplorerJSON;
   /** IndexedDB FS object */
-  private _fs?: PromisifiedFS;
+  private _fs: PromisifiedFS;
   /** Workspace functionality */
   private _workspace?: PgWorkspace;
   /** Whether the user is on a shared page */
@@ -82,13 +80,13 @@ export class PgExplorer {
       this._shared = true;
       this._explorer = explorer;
     } else {
-      this._fs = new FS(PgExplorer._INDEXED_DB_NAME).promises;
       this._explorer = {
         files: {},
       };
       this._workspace = new PgWorkspace();
     }
 
+    this._fs = new FS(PgExplorer._INDEXED_DB_NAME).promises;
     this._refresh = refresh;
   }
 
@@ -164,7 +162,7 @@ export class PgExplorer {
       await this._initializeWorkspaces();
     }
 
-    const fs = this._getFs();
+    const fs = this._fs;
 
     // Sets up the files from IndexedDB to the state
     const setupFiles = async (path: string) => {
@@ -178,7 +176,7 @@ export class PgExplorer {
 
       const subItemPaths = itemNames.map(
         (itemName) =>
-          PgExplorer.appendSlash(path) +
+          PgCommon.appendSlash(path) +
           itemName +
           (PgExplorer.getItemTypeFromName(itemName).folder ? "/" : "")
       );
@@ -343,7 +341,7 @@ export class PgExplorer {
    * NOTE: This function assumes parent directories exist.
    */
   async saveFileToIndexedDB(path: string, data: string) {
-    if (!this.isShared) await this._fs?.writeFile(path, data);
+    if (!this.isShared) await this._fs.writeFile(path, data);
   }
 
   /**
@@ -463,18 +461,33 @@ export class PgExplorer {
 
     const parentFolder = PgExplorer.getParentPathFromPath(fullPath);
 
-    const files = this.files;
+    // Get new path
+    let newPath;
+    if (
+      this._workspace?.allNames.includes(
+        fullPath.substring(1, fullPath.length - 1)
+      )
+    ) {
+      // Github workspace name or any other workspace name with additional '/'
+      // is causing problems. We are mitigating that by directly replacing it.
+      newPath = PgCommon.appendSlash(
+        PgCommon.joinPaths([PgExplorer.PATHS.ROOT_DIR_PATH, newName])
+      );
+    } else {
+      newPath = itemType.file
+        ? parentFolder + newName
+        : parentFolder + newName + "/";
+    }
 
     // Check to see if newName already exists
-    const newPath = itemType.file
-      ? parentFolder + newName
-      : parentFolder + newName + "/";
     if (newPath === fullPath) return;
+
+    const files = this.files;
     if (files[newPath]) throw new Error(ItemError.ALREADY_EXISTS);
 
+    // Rename in IndexedDB
     if (!this.isShared) {
-      // Rename in IndexedDB
-      const fs = this._getFs();
+      const fs = this._fs;
       await fs.rename(fullPath, newPath);
     }
 
@@ -544,7 +557,7 @@ export class PgExplorer {
     }
 
     if (!this.isShared) {
-      const fs = this._getFs();
+      const fs = this._fs;
 
       const stat = await fs.stat(fullPath);
       if (stat.isFile()) await fs.unlink(fullPath);
@@ -752,8 +765,9 @@ export class PgExplorer {
    * Export the current workspace as a zip file
    */
   async exportWorkspace() {
-    const fs = this._getFs();
+    const fs = this._fs;
 
+    const { default: JSZip } = await import("jszip");
     const zip = new JSZip();
 
     const recursivelyGetItems = async (path: string) => {
@@ -762,7 +776,7 @@ export class PgExplorer {
 
       const subItemPaths = itemNames
         .filter((itemName) => !itemName.startsWith("."))
-        .map((itemName) => PgExplorer.appendSlash(path) + itemName);
+        .map((itemName) => PgCommon.appendSlash(path) + itemName);
 
       for (const subItemPath of subItemPaths) {
         const stat = await fs.stat(subItemPath);
@@ -780,6 +794,8 @@ export class PgExplorer {
     await recursivelyGetItems(this.currentWorkspacePath);
 
     const content = await zip.generateAsync({ type: "blob" });
+
+    const { default: saveAs } = await import("file-saver");
     saveAs(content, this.currentWorkspaceName + ".zip");
   }
 
@@ -827,8 +843,7 @@ export class PgExplorer {
     path = this._convertToFullPath(path);
 
     try {
-      const fs = this._getFs();
-      await fs.stat(path);
+      await this._fs.stat(path);
       return true;
     } catch (e: any) {
       if (e.code === "ENOENT" || e.code === "ENOTDIR") return false;
@@ -843,7 +858,7 @@ export class PgExplorer {
    * Reads file and returns the converted file string
    */
   async readToString(path: string) {
-    const data = await this._getFs().readFile(this._convertToFullPath(path));
+    const data = await this._fs.readFile(this._convertToFullPath(path));
     return data.toString();
   }
 
@@ -1007,9 +1022,8 @@ export class PgExplorer {
    * @returns full path based on the input
    */
   appendToCurrentWorkspacePath(path: string) {
-    return PgExplorer.appendSlash(
-      this.currentWorkspacePath +
-        (path.startsWith("/") ? path.substring(1) : path)
+    return PgCommon.appendSlash(
+      this.currentWorkspacePath + PgCommon.withoutPreSlash(path)
     );
   }
 
@@ -1023,7 +1037,7 @@ export class PgExplorer {
 
     const updateIdRust = (content: string) => {
       const rustDeclareIdRegex = new RegExp(
-        /^\s*(([\w]+::)*)declare_id!\("(\w*)"\)/gm
+        /^(([\w]+::)*)declare_id!\("(\w*)"\)/gm
       );
       return content.replace(rustDeclareIdRegex, (match) => {
         const res = rustDeclareIdRegex.exec(match);
@@ -1234,21 +1248,10 @@ export class PgExplorer {
   /** Private methods */
 
   /**
-   * @returns the in-memory FS
-   *
-   * @throws if FS doesn't exist
-   */
-  private _getFs() {
-    const fs = this._fs;
-    if (!fs) throw new Error(ItemError.FS_NOT_FOUND);
-    return fs;
-  }
-
-  /**
    * Creates new directory with create parents optionality
    */
   private async _mkdir(path: string, createParents?: boolean) {
-    const fs = this._getFs();
+    const fs = this._fs;
 
     if (createParents) {
       const folders = path.split("/");
@@ -1278,7 +1281,7 @@ export class PgExplorer {
       await this._mkdir(parentFolder, true);
     }
 
-    await this._getFs().writeFile(path, data);
+    await this._fs.writeFile(path, data);
   }
 
   /**
@@ -1299,7 +1302,7 @@ export class PgExplorer {
    * Remove directory with recursive optionality
    */
   private async _rmdir(path: string, recursive?: boolean) {
-    const fs = this._getFs();
+    const fs = this._fs;
 
     if (recursive) {
       const recursivelyRmdir = async (dir: string[], currentPath: string) => {
@@ -1378,7 +1381,7 @@ export class PgExplorer {
     const srcPath = this.isShared
       ? PgExplorer.PATHS.ROOT_DIR_PATH + PgExplorer.PATHS.SRC_DIRNAME
       : this.appendToCurrentWorkspacePath(PgExplorer.PATHS.SRC_DIRNAME);
-    return PgExplorer.appendSlash(srcPath);
+    return PgCommon.appendSlash(srcPath);
   }
 
   /**
@@ -1386,7 +1389,7 @@ export class PgExplorer {
    * @returns the full path to the workspace root dir with '/' at the end
    */
   private _getWorkspacePath(name: string) {
-    return PgExplorer.PATHS.ROOT_DIR_PATH + PgExplorer.appendSlash(name);
+    return PgExplorer.PATHS.ROOT_DIR_PATH + PgCommon.appendSlash(name);
   }
 
   /**
@@ -1428,33 +1431,23 @@ export class PgExplorer {
     SRC_DIRNAME: "src",
     CLIENT_DIRNAME: "client",
     TESTS_DIRNAME: "tests",
-    METAPLEX_DIRNAME: "metaplex",
-    get CANDY_MACHINE_DIR_PATH() {
-      return PgExplorer.joinPaths([this.METAPLEX_DIRNAME, "candy-machine"]);
-    },
-    get CANDY_MACHINE_CONFIG_FILEPATH() {
-      return PgExplorer.joinPaths([this.CANDY_MACHINE_DIR_PATH, "config.json"]);
-    },
-    get CANDY_MACHINE_CACHE_FILEPATH() {
-      return PgExplorer.joinPaths([this.CANDY_MACHINE_DIR_PATH, "cache.json"]);
-    },
-    get CANDY_MACHINE_ASSETS_DIR_PATH() {
-      return PgExplorer.joinPaths([this.CANDY_MACHINE_DIR_PATH, "assets"]);
-    },
   };
 
   /** Don't change this! */
   private static readonly _INDEXED_DB_NAME = "solana-playground";
 
   /**
-   * Statically get the explorer object from state
+   * Statically get the explorer object from state. This function will wait until
+   * the explorer is not `null`.
    *
    * @returns the explorer object
    */
   static async get<T, R extends PgExplorer>() {
-    return await PgCommon.sendAndReceiveCustomEvent<T, R>(
-      PgCommon.getStaticEventNames(EventName.EXPLORER_STATIC).get
-    );
+    return await PgCommon.tryUntilSuccess(async () => {
+      return await PgCommon.sendAndReceiveCustomEvent<T, R>(
+        PgCommon.getStaticEventNames(EventName.EXPLORER_STATIC).get
+      );
+    });
   }
 
   /**
@@ -1697,20 +1690,5 @@ export class PgExplorer {
 
   static getExplorerIconsPath(name: string) {
     return "/icons/explorer/" + name;
-  }
-
-  static appendSlash(path: string) {
-    if (!path) return "";
-    return path + (path.endsWith("/") ? "" : "/");
-  }
-
-  static withoutPreSlash(path: string) {
-    return path[0] === "/" ? path.substring(1) : path;
-  }
-
-  static joinPaths(paths: string[]) {
-    return paths.reduce(
-      (acc, cur) => this.appendSlash(acc) + this.withoutPreSlash(cur)
-    );
   }
 }

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAtom } from "jotai";
-import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 
-import { PgProgramInfo, PgWallet } from "../../../../../utils/pg";
+import { PgConnection, PgProgramInfo, PgWallet } from "../../../../../utils/pg";
 import { refreshProgramIdAtom } from "../../../../../state";
+import { usePgConnection } from "../../../../../hooks";
 
 interface ProgramData {
   upgradeable: boolean;
@@ -15,14 +15,16 @@ export const useAuthority = () => {
   // To re-render if user changes program id
   const [programIdCount] = useAtom(refreshProgramIdAtom);
 
-  const { connection: conn } = useConnection();
+  const { connection: conn } = usePgConnection();
 
   const [programData, setProgramData] = useState<ProgramData>({
     upgradeable: true,
   });
 
   useEffect(() => {
-    const handleClick = async () => {
+    (async () => {
+      if (!PgConnection.isReady(conn)) return;
+
       const programPk = PgProgramInfo.getPk()?.programPk;
       if (!programPk) return;
 
@@ -53,11 +55,9 @@ export const useAuthority = () => {
 
         setProgramData({ authority: upgradeAuthorityPk, upgradeable: true });
       } catch (e: any) {
-        console.log(e.message);
+        console.log("Could not get authority:", e.message);
       }
-    };
-
-    handleClick();
+    })();
   }, [conn, programIdCount]);
 
   return {

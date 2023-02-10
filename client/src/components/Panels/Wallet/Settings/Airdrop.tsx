@@ -1,26 +1,26 @@
 import { FC, useCallback } from "react";
 import { useAtom } from "jotai";
 import { PublicKey } from "@solana/web3.js";
-import { useConnection } from "@solana/wallet-adapter-react";
 
 import { SettingsItem, SettingsItemProps } from "./SettingsItem";
-import { useAirdropAmount } from "../useAirdropAmount";
-import { useCurrentWallet } from "../useCurrentWallet";
 import { txHashAtom } from "../../../../state";
 import { Emoji } from "../../../../constants";
 import { PgCommon, PgTerminal, PgTx } from "../../../../utils/pg";
+import { useAirdropAmount } from "../useAirdropAmount";
+import { useCurrentWallet } from "../useCurrentWallet";
+import { usePgConnection } from "../../../../hooks";
 
 export const Airdrop: FC<SettingsItemProps> = ({ close }) => {
   const [, setTxHash] = useAtom(txHashAtom);
 
   // Get cap amount for airdrop based on network
-  const { connection: conn } = useConnection();
+  const { connection: conn } = usePgConnection();
   const amount = useAirdropAmount();
   const { pgWalletPk, solWalletPk } = useCurrentWallet();
 
   const airdrop = useCallback(
     async (walletPk: PublicKey) => {
-      await PgTerminal.runCmd(async () => {
+      await PgTerminal.process(async () => {
         if (!amount) return;
 
         close();

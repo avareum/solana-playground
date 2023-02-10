@@ -10,9 +10,9 @@ import {
 import { useAtom } from "jotai";
 import styled, { css } from "styled-components";
 
-import ModalInside from "../../../../../Modal/ModalInside";
+import Modal from "../../../../../Modal";
 import useModal from "../../../../../Modal/useModal";
-import Input, { defaultInputProps } from "../../../../../Input";
+import Input from "../../../../../Input";
 import { explorerAtom } from "../../../../../../state";
 import {
   Framework as FrameworkType,
@@ -63,7 +63,7 @@ export const NewWorkspace = () => {
   };
 
   return (
-    <ModalInside
+    <Modal
       buttonProps={{
         name: "Create",
         onSubmit: newWorkspace,
@@ -80,7 +80,6 @@ export const NewWorkspace = () => {
             value={name}
             placeholder="my first project..."
             className={error ? ClassName.ERROR : ""}
-            {...defaultInputProps}
           />
         </WorkspaceNameWrapper>
         <FrameworkSectionWrapper>
@@ -97,7 +96,7 @@ export const NewWorkspace = () => {
           </FrameworksWrapper>
         </FrameworkSectionWrapper>
       </Content>
-    </ModalInside>
+    </Modal>
   );
 };
 

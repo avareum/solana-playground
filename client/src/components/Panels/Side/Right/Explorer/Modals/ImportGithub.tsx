@@ -2,9 +2,9 @@ import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useAtom } from "jotai";
 import styled, { css } from "styled-components";
 
-import ModalInside from "../../../../../Modal/ModalInside";
+import Modal from "../../../../../Modal";
 import useModal from "../../../../../Modal/useModal";
-import Input, { defaultInputProps } from "../../../../../Input";
+import Input from "../../../../../Input";
 import { explorerAtom } from "../../../../../../state";
 import { PgCommon } from "../../../../../../utils/pg";
 import { ClassName } from "../../../../../../constants";
@@ -45,7 +45,7 @@ export const ImportGithub = () => {
   };
 
   return (
-    <ModalInside
+    <Modal
       buttonProps={{
         name: "Import",
         onSubmit: importFromGithub,
@@ -66,7 +66,6 @@ export const ImportGithub = () => {
           value={url}
           className={error ? ClassName.ERROR : ""}
           placeholder="https://github.com/..."
-          {...defaultInputProps}
         />
       </Content>
       <DescriptionWrapper>
@@ -93,7 +92,7 @@ export const ImportGithub = () => {
           (Seahorse)
         </Desc>
       </DescriptionWrapper>
-    </ModalInside>
+    </Modal>
   );
 };
 

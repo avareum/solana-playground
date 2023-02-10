@@ -11,7 +11,7 @@ import { useAtom } from "jotai";
 import styled from "styled-components";
 
 import LangIcon from "../../../../../LangIcon";
-import Input, { defaultInputProps } from "../../../../../Input";
+import Input from "../../../../../Input";
 import {
   ctxSelectedAtom,
   explorerAtom,
@@ -92,6 +92,11 @@ export const NewItem = () => {
     };
   }, [el, setEl, handleClickOut, handleKeyPress]);
 
+  // Reset item name on element change
+  useEffect(() => {
+    if (!el) setItemName("");
+  }, [el]);
+
   const depth = useMemo(() => {
     if (!el || !explorer) return 0;
     let path = PgExplorer.getItemPathFromEl(el.firstChild as HTMLDivElement);
@@ -117,11 +122,7 @@ export const NewItem = () => {
     ? ReactDOM.createPortal(
         <Wrapper ref={newFileRef} depth={depth}>
           <LangIcon fileName={itemName} />
-          <Input
-            ref={inputRef}
-            onChange={handleChange}
-            {...defaultInputProps}
-          />
+          <Input ref={inputRef} onChange={handleChange} />
         </Wrapper>,
         el
       )

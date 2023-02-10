@@ -1,18 +1,18 @@
 import { ChangeEvent, FC, useState } from "react";
 import { Idl } from "@project-serum/anchor";
-import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import styled, { css } from "styled-components";
 
 import Button from "../../../../Button";
 import Foldable from "../../../../Foldable";
 import InputLabel from "./InputLabel";
-import Input, { defaultInputProps } from "../../../../Input";
+import Input from "../../../../Input";
 import { ClassName } from "../../../../../constants";
 import { PgAccount, PgCommon } from "../../../../../utils/pg";
 import { SpinnerWithBg } from "../../../../Loading";
 import { useCurrentWallet } from "../../../Wallet";
 import { CodeResult } from "./CodeResult";
+import { usePgConnection } from "../../../../../hooks";
 
 interface FetchableAccountProps {
   accountName: string;
@@ -41,7 +41,7 @@ const FetchableAccountInside: FC<FetchableAccountProps> = ({
   idl,
   index,
 }) => {
-  const { connection: conn } = useConnection();
+  const { connection: conn } = usePgConnection();
   const { currentWallet } = useCurrentWallet();
 
   const [enteredAddress, setEnteredAddress] = useState("");
@@ -130,7 +130,6 @@ const FetchableAccountInside: FC<FetchableAccountProps> = ({
           className={enteredAddressError ? ClassName.ERROR : ""}
           value={enteredAddress}
           onChange={handleAddressChange}
-          {...defaultInputProps}
         />
       </InputWrapper>
 

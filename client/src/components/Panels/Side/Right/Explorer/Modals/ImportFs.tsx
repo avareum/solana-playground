@@ -3,9 +3,9 @@ import { useAtom } from "jotai";
 import styled from "styled-components";
 
 import UploadArea from "../../../../../UploadArea";
-import ModalInside from "../../../../../Modal/ModalInside";
+import Modal from "../../../../../Modal";
 import useModal from "../../../../../Modal/useModal";
-import Input, { defaultInputProps } from "../../../../../Input";
+import Input from "../../../../../Input";
 import { explorerAtom } from "../../../../../../state";
 import { Files, Lang, PgCommon, PgExplorer } from "../../../../../../utils/pg";
 
@@ -45,7 +45,7 @@ export const ImportFs = () => {
             path = path.substring(1);
             break;
           default:
-            path = path.replace(/\/\w+\//, "");
+            path = path.replace(/\/[\w-]+\//, "");
         }
 
         const lang = PgExplorer.getLanguageFromPath(path);
@@ -90,7 +90,7 @@ export const ImportFs = () => {
   };
 
   return (
-    <ModalInside
+    <Modal
       buttonProps={{
         name: "Import",
         onSubmit: importNewWorkspace,
@@ -105,7 +105,6 @@ export const ImportFs = () => {
             onChange={handleChange}
             value={name}
             placeholder="my local project..."
-            {...defaultInputProps}
           />
         </WorkspaceNameWrapper>
         <UploadArea
@@ -114,7 +113,7 @@ export const ImportFs = () => {
           filesLength={files?.length}
         />
       </Content>
-    </ModalInside>
+    </Modal>
   );
 };
 

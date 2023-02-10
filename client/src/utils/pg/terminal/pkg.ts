@@ -2,24 +2,13 @@ import { GITHUB_URL } from "../../../constants";
 import { PgTerminal } from "./terminal";
 
 export interface Pkgs {
-  compileSeahorse?: (pythonSource: string, programName: string) => string[];
-  runSolana?: (
-    arg: string,
-    endpoint: string,
-    commitment: string,
-    keypairBytes: Uint8Array
-  ) => void;
-  runSplToken?: (
-    arg: string,
-    endpoint: string,
-    commitment: string,
-    keypairBytes: Uint8Array
-  ) => void;
-  runSugar?: (arg: string) => Promise<void>;
-  rustfmt?: (input: string) => {
-    code: () => string;
-    error: () => string | undefined;
-  };
+  Playnet?: typeof import("@solana-playground/playnet").Playnet;
+  compileSeahorse?: typeof import("@solana-playground/seahorse-compile-wasm").compileSeahorse;
+  runAnchor?: typeof import("@solana-playground/anchor-cli-wasm").runAnchor;
+  runSolana?: typeof import("@solana-playground/solana-cli-wasm").runSolana;
+  runSplToken?: typeof import("@solana-playground/spl-token-cli-wasm").runSplToken;
+  runSugar?: typeof import("@solana-playground/sugar-cli-wasm").runSugar;
+  rustfmt?: typeof import("@solana-playground/rustfmt-wasm").rustfmt;
 }
 
 export interface PkgInfo {
@@ -28,6 +17,8 @@ export interface PkgInfo {
 }
 
 export enum PkgName {
+  ANCHOR_CLI = "anchor-cli",
+  PLAYNET = "playnet",
   RUSTFMT = "rustfmt",
   SEAHORSE_COMPILE = "seahorse-compile",
   SOLANA_CLI = "solana-cli",
@@ -36,6 +27,8 @@ export enum PkgName {
 }
 
 enum PkgUiName {
+  ANCHOR_CLI = "Anchor CLI",
+  PLAYNET = "Playnet",
   RUSTFMT = "Rustfmt",
   SEAHORSE_COMPILE = "Seahorse",
   SOLANA_CLI = "Solana CLI",
@@ -44,6 +37,14 @@ enum PkgUiName {
 }
 
 export class PgPkg {
+  static readonly ANCHOR_CLI: PkgInfo = {
+    name: PkgName.ANCHOR_CLI,
+    uiName: PkgUiName.ANCHOR_CLI,
+  };
+  static readonly PLAYNET: PkgInfo = {
+    name: PkgName.PLAYNET,
+    uiName: PkgUiName.PLAYNET,
+  };
   static readonly RUSTFMT: PkgInfo = {
     name: PkgName.RUSTFMT,
     uiName: PkgUiName.RUSTFMT,
@@ -104,11 +105,16 @@ export class PgPkg {
   }
 
   /**
-   * Imports the given package asynchronously
+   * Import the given package asynchronously
+   *
    * @returns the imported package
    */
   private static async _loadPkg(pkgName: PkgName) {
     switch (pkgName) {
+      case PkgName.ANCHOR_CLI:
+        return await import("@solana-playground/anchor-cli-wasm");
+      case PkgName.PLAYNET:
+        return await import("@solana-playground/playnet");
       case PkgName.RUSTFMT:
         return await import("@solana-playground/rustfmt-wasm");
       case PkgName.SEAHORSE_COMPILE:

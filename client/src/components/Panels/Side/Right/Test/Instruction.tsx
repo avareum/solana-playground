@@ -2,7 +2,6 @@ import { createContext, FC, useCallback, useEffect, useState } from "react";
 import { useAtom } from "jotai";
 import { Idl } from "@project-serum/anchor";
 import { IdlAccount, IdlInstruction } from "@project-serum/anchor/dist/cjs/idl";
-import { useConnection } from "@solana/wallet-adapter-react";
 import styled, { css } from "styled-components";
 
 import Account from "./Account";
@@ -21,6 +20,7 @@ import {
   TxVals,
 } from "../../../../../utils/pg";
 import { useCurrentWallet } from "../../../Wallet";
+import { usePgConnection } from "../../../../../hooks";
 
 interface FnContextProps {
   updateTxVals: (props: updateTxValsProps) => void;
@@ -48,7 +48,7 @@ interface InstructionInsideProps {
 const InstructionInside: FC<InstructionInsideProps> = ({ ix, idl }) => {
   const [, setTxHash] = useAtom(txHashAtom);
 
-  const { connection: conn } = useConnection();
+  const { connection: conn } = usePgConnection();
 
   // State
   const [txVals, setTxVals] = useState<TxVals>({
@@ -145,7 +145,7 @@ const InstructionInside: FC<InstructionInsideProps> = ({ ix, idl }) => {
 
   // Test submission
   const handleTest = useCallback(async () => {
-    const showLogTxHash = await PgTerminal.runCmd(async () => {
+    const showLogTxHash = await PgTerminal.process(async () => {
       if (!currentWallet) return;
 
       setLoading(true);
@@ -192,8 +192,11 @@ const InstructionInside: FC<InstructionInsideProps> = ({ ix, idl }) => {
     });
 
     if (showLogTxHash) {
-      await PgCommon.sleep(1000);
-      PgTerminal.runCmdFromStr(`solana confirm ${showLogTxHash} -v`);
+      // Wait before confirming the transaction on live clusters
+      if (conn.rpcEndpoint.startsWith("https")) {
+        await PgCommon.sleep(1500);
+      }
+      PgTerminal.execute({ solana: `confirm ${showLogTxHash} -v` });
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
