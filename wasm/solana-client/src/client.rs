@@ -714,6 +714,16 @@ impl WasmClient {
         Ok(response.into())
     }
 
+    pub async fn get_signatures_for_address(
+        &self,
+        address: &Pubkey,
+    ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        let request = GetSignaturesForAddressRequest::new(*address).into();
+        let response = GetSignaturesForAddressResponse::from(self.send(request).await?);
+
+        Ok(response.into())
+    }
+
     pub async fn minimum_ledger_slot(&self) -> ClientResult<Slot> {
         let request = MinimumLedgerSlotRequest::new().into();
         let response = MinimumLedgerSlotResponse::from(self.send(request).await?);
@@ -969,30 +979,28 @@ impl WasmClient {
     ) -> ClientResult<Vec<Option<UiTokenAccount>>> {
         let request = GetMultipleAccountsRequest::new_with_config(pubkeys.to_vec(), config).into();
         let response = GetMultipleAccountsResponse::from(self.send(request).await?);
-        
+
         Ok(response
             .value
             .into_iter()
             .filter(|maybe_acc| maybe_acc.is_some())
             .flatten()
-            .map(|acc| {
-                match acc.data {
-                    UiAccountData::Json(account_data) => {
-                        let token_account_type: Option<TokenAccountType> =
+            .map(|acc| match acc.data {
+                UiAccountData::Json(account_data) => {
+                    let token_account_type: Option<TokenAccountType> =
                         match serde_json::from_value(account_data.parsed) {
-                            Ok(t) =>Some(t),
+                            Ok(t) => Some(t),
                             Err(_) => None,
                         };
-    
-                        match token_account_type.unwrap() {
-                            TokenAccountType::Account(token_account) => Some(token_account),
-                            TokenAccountType::Mint(_) => todo!(),
-                            TokenAccountType::Multisig(_) => todo!(),
-                        }
+
+                    match token_account_type.unwrap() {
+                        TokenAccountType::Account(token_account) => Some(token_account),
+                        TokenAccountType::Mint(_) => todo!(),
+                        TokenAccountType::Multisig(_) => todo!(),
                     }
-                    UiAccountData::LegacyBinary(_) => todo!(),
-                    UiAccountData::Binary(_, _) => todo!(),
                 }
+                UiAccountData::LegacyBinary(_) => todo!(),
+                UiAccountData::Binary(_, _) => todo!(),
             })
             .collect())
     }
@@ -1006,9 +1014,9 @@ impl WasmClient {
             pubkeys,
             RpcAccountInfoConfig {
                 encoding: Some(UiAccountEncoding::JsonParsed),
-            commitment: Some(commitment_config),
-            data_slice: None,
-            min_context_slot: None,
+                commitment: Some(commitment_config),
+                data_slice: None,
+                min_context_slot: None,
                 ..RpcAccountInfoConfig::default()
             },
         )
